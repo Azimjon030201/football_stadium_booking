@@ -1,4 +1,13 @@
-import { IsLatitude, IsLongitude, IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  Length,
+  MaxLength,
+  IsLatitude,
+  IsLongitude,
+  Matches,
+} from 'class-validator';
 
 export class CreateStadiumDto {
   @Length(3, 100)
@@ -14,12 +23,15 @@ export class CreateStadiumDto {
   @IsString()
   address: string;
 
+  @IsNumber()
   @IsLatitude()
   latitude: number;
 
+  @IsNumber()
   @IsLongitude()
   longitude: number;
 
+  @IsString()
   @Matches(/^\+998[0-9]{9}$/)
   phone: string;
 }
