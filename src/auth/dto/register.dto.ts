@@ -21,4 +21,5 @@ export class RegisterDto {
 
   @Length(2, 50)
   lastName: string;
+  name: any;
 }
