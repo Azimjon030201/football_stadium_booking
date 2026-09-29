@@ -1,16 +1,17 @@
-import { IsLatitude, IsLongitude, IsOptional, Length, Matches, MaxLength } from 'class-validator';
+import { IsLatitude, IsLongitude, IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
 
-// DIQQAT: status va ownerId ataylab yo'q — bularni server o'zi belgilaydi.
-// Batafsil: Dev3 qo'llanma, 6-BOB, TASK-01, TASK-05
 export class CreateStadiumDto {
   @Length(3, 100)
+  @IsString()
   name: string;
 
   @IsOptional()
   @MaxLength(2000)
+  @IsString()
   description?: string;
 
   @Length(5, 200)
+  @IsString()
   address: string;
 
   @IsLatitude()

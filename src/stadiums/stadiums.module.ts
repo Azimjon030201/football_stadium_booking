@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { StadiumsController } from './stadiums.controller';
 import { StadiumsService } from './stadiums.service';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { PrismaModule } from '../prisma/prisma.module'; 
 
 @Module({
+  imports: [PrismaModule],
   controllers: [StadiumsController],
-  providers: [StadiumsService, JwtAuthGuard],
+  providers: [StadiumsService],
   exports: [StadiumsService],
 })
 export class StadiumsModule {}
