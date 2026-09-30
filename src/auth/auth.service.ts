@@ -3,13 +3,18 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   async register(dto: RegisterDto) {
     const email = dto.email.toLowerCase();
@@ -44,28 +49,41 @@ export class AuthService {
     return result;
   }
 
-  async login(email: string, password: string) {
+  async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
       where: {
-        email: email.toLowerCase(),
+        email: dto.email.toLowerCase(),
       },
     });
 
     if (!user) {
-      throw new UnauthorizedException('Email yoki parol noto‘g‘ri');
+      throw new UnauthorizedException({
+        error: 'AUTH_INVALID_CREDENTIALS',
+      });
     }
 
-    const passwordMatch = await bcrypt.compare(
-      password,
+    const passwordMatches = await bcrypt.compare(
+      dto.password,
       user.passwordHash,
     );
 
-    if (!passwordMatch) {
-      throw new UnauthorizedException('Email yoki parol noto‘g‘ri');
+    if (!passwordMatches) {
+      throw new UnauthorizedException({
+        error: 'AUTH_INVALID_CREDENTIALS',
+      });
     }
 
-    const { passwordHash: _, ...result } = user;
+    const accessToken = this.jwtService.sign({
+      sub: user.id,
+      role: user.role,
+    });
 
-    return result;
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      accessToken,
+    };
   }
 }
