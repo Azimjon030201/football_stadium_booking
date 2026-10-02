@@ -1,46 +1,151 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { ChangePasswordDto } from './dto/change-password.dto';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
-// Batafsil: Dev1 qo'llanma, 6-BOB. Har metod — bitta TASK'ga mos.
 @Injectable()
 export class AuthService {
   constructor(
-    private prisma: PrismaService,
-    private jwtService: JwtService,
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
   ) {}
 
-  // TASK-01: POST /auth/register
-  // - email/telefon bandligini tekshirish (409 USER_ALREADY_EXISTS)
-  // - bcrypt bilan parolni hash qilish (saltRounds=12)
-  // - passwordHash javobda bo'lmasligi kerak
   async register(dto: RegisterDto) {
-    throw new Error('TODO (Dev1 TASK-01): register() implement qilinmagan');
+    const email = dto.email.toLowerCase();
+
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existing) {
+      throw new ConflictException({
+        error: 'USER_ALREADY_EXISTS',
+        message: "Bu email allaqachon ro'yxatdan o'tgan",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        phone: dto.phone,
+        passwordHash,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        role: 'USER',
+        status: 'ACTIVE',
+      },
+    });
+
+    const { passwordHash: _, ...result } = user;
+
+    return result;
   }
 
-  // TASK-03: POST /auth/login
-  // - bcrypt.compare bilan parolni tekshirish
-  // - xato holatda 401 AUTH_INVALID_CREDENTIALS (email topilmadi va parol
-  //   xato uchun BIR XIL xato qaytariladi)
   async login(dto: LoginDto) {
-    throw new Error('TODO (Dev1 TASK-03): login() implement qilinmagan');
+    const user = await this.prisma.user.findUnique({
+      where: {
+        email: dto.email.toLowerCase(),
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException({
+        error: 'AUTH_INVALID_CREDENTIALS',
+      });
+    }
+
+    const passwordMatches = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
+
+    if (!passwordMatches) {
+      throw new UnauthorizedException({
+        error: 'AUTH_INVALID_CREDENTIALS',
+      });
+    }
+
+    const accessToken = this.jwtService.sign({
+      sub: user.id,
+      role: user.role,
+    });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      accessToken,
+    };
+  }
+  async login(dto: LoginDto) {
+  const user = await this.prisma.user.findUnique({
+    where: {
+      email: dto.email.toLowerCase(),
+    },
+  });
+
+  if (!user) {
+    throw new UnauthorizedException({
+      error: 'AUTH_INVALID_CREDENTIALS',
+    });
   }
 
-  // TASK-06: POST /auth/logout — refresh tokenni revoke qilish
-  async logout(refreshToken: string) {
-    throw new Error('TODO (Dev1 TASK-06): logout() implement qilinmagan');
+  const passwordMatches = await bcrypt.compare(
+    dto.password,
+    user.passwordHash,
+  );
+
+  if (!passwordMatches) {
+    throw new UnauthorizedException({
+      error: 'AUTH_INVALID_CREDENTIALS',
+    });
   }
 
-  // TASK-08, TASK-09: refresh token generatsiya va POST /auth/refresh
-  async refresh(refreshToken: string) {
-    throw new Error('TODO (Dev1 TASK-08/09): refresh() implement qilinmagan');
-  }
+  const accessToken = this.jwtService.sign({
+    sub: user.id,
+    role: user.role,
+  });
 
-  // TASK-10: POST /auth/change-password
-  async changePassword(userId: string, dto: ChangePasswordDto) {
-    throw new Error('TODO (Dev1 TASK-10): changePassword() implement qilinmagan');
-  }
+
+  const refreshToken = crypto.randomBytes(40).toString('hex');
+
+  
+  const tokenHash = crypto
+    .createHash('sha256')
+    .update(refreshToken)
+    .digest('hex');
+
+
+  const expiresAt = new Date(
+    Date.now() + 30 * 24 * 60 * 60 * 1000,
+  );
+
+
+  await this.prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+    },
+  });
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+    },
+    accessToken,
+    refreshToken,
+  };
+}
 }
