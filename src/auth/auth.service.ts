@@ -74,27 +74,22 @@ export class AuthService {
       });
     }
 
-    // Access token
     const accessToken = this.jwtService.sign({
       sub: user.id,
       role: user.role,
     });
 
-    // Refresh token yaratish
     const refreshToken = crypto.randomBytes(40).toString('hex');
 
-    // Refresh tokenni hash qilish
     const tokenHash = crypto
       .createHash('sha256')
       .update(refreshToken)
       .digest('hex');
 
-    // 30 kunlik muddat
     const expiresAt = new Date(
       Date.now() + 30 * 24 * 60 * 60 * 1000,
     );
 
-    // Bazaga faqat hash saqlanadi
     await this.prisma.refreshToken.create({
       data: {
         userId: user.id,
@@ -110,6 +105,46 @@ export class AuthService {
       },
       accessToken,
       refreshToken,
+    };
+  }
+
+  async refresh(refreshToken: string) {
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: {
+        tokenHash,
+      },
+    });
+
+    if (!stored || stored.expiresAt < new Date()) {
+      throw new UnauthorizedException({
+        error: 'AUTH_TOKEN_EXPIRED',
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: stored.userId,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException({
+        error: 'AUTH_INVALID_CREDENTIALS',
+      });
+    }
+
+    const accessToken = this.jwtService.sign({
+      sub: user.id,
+      role: user.role,
+    });
+
+    return {
+      accessToken,
     };
   }
 }
