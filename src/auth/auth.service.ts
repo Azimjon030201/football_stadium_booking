@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -86,4 +87,65 @@ export class AuthService {
       accessToken,
     };
   }
+  async login(dto: LoginDto) {
+  const user = await this.prisma.user.findUnique({
+    where: {
+      email: dto.email.toLowerCase(),
+    },
+  });
+
+  if (!user) {
+    throw new UnauthorizedException({
+      error: 'AUTH_INVALID_CREDENTIALS',
+    });
+  }
+
+  const passwordMatches = await bcrypt.compare(
+    dto.password,
+    user.passwordHash,
+  );
+
+  if (!passwordMatches) {
+    throw new UnauthorizedException({
+      error: 'AUTH_INVALID_CREDENTIALS',
+    });
+  }
+
+  const accessToken = this.jwtService.sign({
+    sub: user.id,
+    role: user.role,
+  });
+
+
+  const refreshToken = crypto.randomBytes(40).toString('hex');
+
+  
+  const tokenHash = crypto
+    .createHash('sha256')
+    .update(refreshToken)
+    .digest('hex');
+
+
+  const expiresAt = new Date(
+    Date.now() + 30 * 24 * 60 * 60 * 1000,
+  );
+
+
+  await this.prisma.refreshToken.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+    },
+  });
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+    },
+    accessToken,
+    refreshToken,
+  };
+}
 }
