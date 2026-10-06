@@ -15,7 +15,9 @@ export class RegisterDto {
       "Parol kamida 8 belgi, 1 katta, 1 kichik harf va 1 raqam bo'lishi kerak",
   })
   password: string;
+    
 
+  
   @Length(2, 50)
   firstName: string;
 
