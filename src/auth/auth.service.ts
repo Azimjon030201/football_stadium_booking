@@ -79,73 +79,72 @@ export class AuthService {
       role: user.role,
     });
 
+    const refreshToken = crypto.randomBytes(40).toString('hex');
+
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+
+    const expiresAt = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000,
+    );
+
+    await this.prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
     return {
       user: {
         id: user.id,
         email: user.email,
       },
       accessToken,
+      refreshToken,
     };
   }
-  async login(dto: LoginDto) {
-  const user = await this.prisma.user.findUnique({
-    where: {
-      email: dto.email.toLowerCase(),
-    },
-  });
 
-  if (!user) {
-    throw new UnauthorizedException({
-      error: 'AUTH_INVALID_CREDENTIALS',
+  async refresh(refreshToken: string) {
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: {
+        tokenHash,
+      },
     });
-  }
 
-  const passwordMatches = await bcrypt.compare(
-    dto.password,
-    user.passwordHash,
-  );
+    if (!stored || stored.expiresAt < new Date()) {
+      throw new UnauthorizedException({
+        error: 'AUTH_TOKEN_EXPIRED',
+      });
+    }
 
-  if (!passwordMatches) {
-    throw new UnauthorizedException({
-      error: 'AUTH_INVALID_CREDENTIALS',
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: stored.userId,
+      },
     });
+
+    if (!user) {
+      throw new UnauthorizedException({
+        error: 'AUTH_INVALID_CREDENTIALS',
+      });
+    }
+
+    const accessToken = this.jwtService.sign({
+      sub: user.id,
+      role: user.role,
+    });
+
+    return {
+      accessToken,
+    };
   }
-
-  const accessToken = this.jwtService.sign({
-    sub: user.id,
-    role: user.role,
-  });
-
-
-  const refreshToken = crypto.randomBytes(40).toString('hex');
-
-  
-  const tokenHash = crypto
-    .createHash('sha256')
-    .update(refreshToken)
-    .digest('hex');
-
-
-  const expiresAt = new Date(
-    Date.now() + 30 * 24 * 60 * 60 * 1000,
-  );
-
-
-  await this.prisma.refreshToken.create({
-    data: {
-      userId: user.id,
-      tokenHash,
-      expiresAt,
-    },
-  });
-
-  return {
-    user: {
-      id: user.id,
-      email: user.email,
-    },
-    accessToken,
-    refreshToken,
-  };
-}
 }
