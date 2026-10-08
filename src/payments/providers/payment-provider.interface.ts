@@ -1,6 +1,4 @@
-// Barcha to'lov provayderlari (Mock, kelajakda Click/Payme/Uzum) shu
-// interfeysga rioya qiladi (Strategy Pattern).
-// Batafsil: Dev5 qo'llanma, 6-BOB, TASK-02
+// Loyihada allaqachon bor bo'lsa, shuni ishlating (faqat imzo mos bo'lsin).
 export interface PaymentProviderInterface {
   initiate(
     amount: number,
