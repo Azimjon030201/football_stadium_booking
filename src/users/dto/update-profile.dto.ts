@@ -1,17 +1,14 @@
-import { IsOptional, Length, Matches } from 'class-validator';
+import { IsOptional, IsString, Length, Matches } from 'class-validator';
 
-// DIQQAT: email maydoni ataylab yo'q — email immutable (Assumption A-03).
-// Batafsil: Dev2 qo'llanma, 6-BOB, TASK-02
+// DIQQAT: email ataylab yo'q — email o'zgarmaydi (Assumption A-03).
 export class UpdateProfileDto {
-  @IsOptional()
-  @Length(2, 50)
+  @IsOptional() @IsString() @Length(2, 50)
   firstName?: string;
 
-  @IsOptional()
-  @Length(2, 50)
+  @IsOptional() @IsString() @Length(2, 50)
   lastName?: string;
 
-  @IsOptional()
-  @Matches(/^\+998[0-9]{9}$/)
+  @IsOptional() @IsString()
+  @Matches(/^\+998[0-9]{9}$/, { message: "Telefon +998XXXXXXXXX formatida bo'lishi kerak" })
   phone?: string;
 }
