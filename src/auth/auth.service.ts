@@ -148,7 +148,25 @@ export class AuthService {
       accessToken,
     };
   }
-    async changePassword(
+
+  async logout(refreshToken?: string) {
+    if (!refreshToken) {
+      return;
+    }
+
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+
+    await this.prisma.refreshToken
+      .delete({
+        where: { tokenHash },
+      })
+      .catch(() => undefined);
+  }
+
+  async changePassword(
     userId: string,
     dto: ChangePasswordDto,
   ) {
