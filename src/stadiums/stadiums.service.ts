@@ -95,7 +95,7 @@ export class StadiumsService {
     });
   }
 
-  async remove(id: string, user: { userId: string; role: string }) {
+  async archive(id: string, user: { userId: string; role: string }) {
     const stadium = await this.prisma.stadium.findFirst({
       where: { id, deletedAt: null },
     });
@@ -108,7 +108,10 @@ export class StadiumsService {
 
     return this.prisma.stadium.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: {
+        status: StadiumStatus.ARCHIVED,
+        deletedAt: new Date(),
+      },
     });
   }
 
@@ -126,6 +129,31 @@ export class StadiumsService {
     }
 
     if (stadium.status !== StadiumStatus.DRAFT) {
+      throw new ConflictException({ error: 'STADIUM_INVALID_STATE' });
+    }
+
+    return this.prisma.stadium.update({
+      where: { id },
+      data: { status: StadiumStatus.PENDING }, 
+    });
+  }
+
+  async getAdminStadiums(status?: string) {
+    return this.prisma.stadium.findMany({
+      where: status ? { status: status as StadiumStatus } : {},
+    });
+  }
+
+  async approve(id: string) {
+    const stadium = await this.prisma.stadium.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!stadium) {
+      throw new NotFoundException({ error: 'STADIUM_NOT_FOUND' });
+    }
+
+    if (stadium.status !== StadiumStatus.PENDING) {
       throw new ConflictException({ error: 'STADIUM_INVALID_STATE' });
     }
 
