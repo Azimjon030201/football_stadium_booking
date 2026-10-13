@@ -1,22 +1,90 @@
-import { ArgumentsHost, Catch, ExceptionFilter } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  Logger,
+} from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { ErrorCodes } from '../constants/error-codes';
 
-// TASK-07 (Dev2, Hafta 2): butun ilova uchun BITTA standart xato formati
-// (SRS 27-bo'lim): { success, statusCode, message, error, timestamp, path }
-//
-// TODO (Dev2 TASK-07):
-// 1) exception HttpException bo'lsa exception.getStatus()/getResponse()
-//    orqali status va xabarni oling, aks holda 500 + umumiy xabar.
-// 2) response.status(status).json({ success:false, statusCode, message,
-//    error, timestamp: new Date().toISOString(), path: request.url })
-//    shaklida qaytaring.
-// 3) Implement qilgach, main.ts'da
-//    app.useGlobalFilters(new AllExceptionsFilter()) qatorini oching
-//    (hozircha izohda qoldirilgan — shu ishga tushmaguncha NestJS'ning
-//    o'zining standart xato formatidan foydalaniladi).
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
-  catch(exception: unknown, host: ArgumentsHost) {
-    // Implement qilinmaguncha — NestJS standart xatosiga topshiriladi.
-    throw exception;
+  private readonly logger = new Logger(AllExceptionsFilter.name);
+
+  catch(exception: unknown, host: ArgumentsHost): void {
+    const context = host.switchToHttp();
+    const response = context.getResponse<Response>();
+    const request = context.getRequest<Request>();
+
+    let statusCode = 500;
+    let message: string | string[] = 'Kutilmagan server xatosi';
+    let error: string = ErrorCodes.INTERNAL_ERROR;
+
+    if (exception instanceof HttpException) {
+      statusCode = exception.getStatus();
+
+      const defaultErrors: Record<number, string> = {
+        400: ErrorCodes.VALIDATION_ERROR,
+        401: ErrorCodes.UNAUTHORIZED,
+        403: ErrorCodes.FORBIDDEN_RESOURCE,
+        404: ErrorCodes.NOT_FOUND,
+        409: ErrorCodes.CONFLICT,
+        429: ErrorCodes.RATE_LIMIT_EXCEEDED,
+      };
+
+      error = defaultErrors[statusCode] ?? ErrorCodes.HTTP_ERROR;
+
+      const body = exception.getResponse();
+
+      if (typeof body === 'string') {
+        message = body;
+      } else {
+        const details = body as {
+          message?: unknown;
+          error?: unknown;
+        };
+
+        message = exception.message;
+
+        if (typeof details.message === 'string') {
+          message = details.message;
+        } else if (
+          Array.isArray(details.message) &&
+          details.message.every(
+            (item: unknown) => typeof item === 'string',
+          )
+        ) {
+          message = details.message as string[];
+        }
+
+        if (
+          typeof details.error === 'string' &&
+          /^[A-Z][A-Z0-9_]*$/.test(details.error)
+        ) {
+          error = details.error;
+        }
+      }
+    }
+
+    if (statusCode >= 500) {
+      this.logger.error(
+        exception instanceof Error
+          ? exception.stack ?? exception.message
+          : 'Noma’lum server xatosi',
+      );
+
+      message = 'Kutilmagan server xatosi';
+      error = ErrorCodes.INTERNAL_ERROR;
+    }
+
+    response.status(statusCode).json({
+      success: false,
+      statusCode,
+      message,
+      error,
+      timestamp: new Date().toISOString(),
+      path: request.originalUrl,
+    });
   }
 }
