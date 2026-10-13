@@ -1,4 +1,4 @@
-git# Multi-stage build (SRS 41.3-bo'lim)
+# Multi-stage build (SRS 41.3-bo'lim)
 
 FROM node:20-alpine AS deps
 WORKDIR /app

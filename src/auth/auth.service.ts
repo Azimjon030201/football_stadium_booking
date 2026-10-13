@@ -3,6 +3,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -75,10 +76,7 @@ export class AuthService {
       });
     }
 
-    const accessToken = this.jwtService.sign({
-      sub: user.id,
-      role: user.role,
-    });
+    const accessToken = this.createAccessToken(user.id, user.role);
 
     const refreshToken = crypto.randomBytes(40).toString('hex');
 
@@ -139,16 +137,31 @@ export class AuthService {
       });
     }
 
-    const accessToken = this.jwtService.sign({
-      sub: user.id,
-      role: user.role,
-    });
+    const accessToken = this.createAccessToken(user.id, user.role);
 
     return {
       accessToken,
     };
   }
-    async changePassword(
+
+  async logout(refreshToken?: string) {
+    if (!refreshToken) {
+      return;
+    }
+
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+
+    await this.prisma.refreshToken
+      .delete({
+        where: { tokenHash },
+      })
+      .catch(() => undefined);
+  }
+
+  async changePassword(
     userId: string,
     dto: ChangePasswordDto,
   ) {
@@ -184,5 +197,9 @@ export class AuthService {
     return {
       message: 'Password changed successfully',
     };
+  }
+
+  private createAccessToken(userId: string, role: UserRole) {
+    return this.jwtService.sign({ sub: userId, role });
   }
 }

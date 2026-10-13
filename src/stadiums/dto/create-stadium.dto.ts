@@ -27,12 +27,12 @@ export class CreateStadiumDto {
   @IsString()
   address: string;
 
-  @ApiProperty({ example: 41.2995, description: 'Геолокация (широта)' })
+  @ApiProperty({ example: 41.2995, description: 'Kenglik' })
   @IsNumber()
   @IsLatitude()
   latitude: number;
 
-  @ApiProperty({ example: 69.2401, description: 'Геолокация (долгота)' })
+  @ApiProperty({ example: 69.2401, description: 'Uzunlik' })
   @IsNumber()
   @IsLongitude()
   longitude: number;
