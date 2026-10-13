@@ -1,6 +1,6 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { PaymentsService } from './payments.service';
-import { MockProvider } from './providers/mock-provider';
+import { MockProvider } from '../providers/mock-provider';
+import { PaymentsService } from '../payments.service';
 
 const mkBooking = (over: any = {}) => ({
   id: 'b1', userId: 'u1', status: 'PENDING', price: '100000.00', payment: null, ...over,

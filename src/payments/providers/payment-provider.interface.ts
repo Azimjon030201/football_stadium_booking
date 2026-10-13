@@ -1,7 +1,18 @@
-// Loyihada allaqachon bor bo'lsa, shuni ishlating (faqat imzo mos bo'lsin).
+export type ProviderPaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED';
+
+export interface InitiatePaymentResult {
+  transactionId: string;
+  status: ProviderPaymentStatus;
+}
+
+export interface RefundResult {
+  status: 'REFUNDED' | 'FAILED';
+}
+
 export interface PaymentProviderInterface {
-  initiate(
-    amount: number,
-    bookingId: string,
-  ): Promise<{ transactionId: string; status: string }>;
+  readonly name: string;
+
+  initiate(amount: number, bookingId: string): Promise<InitiatePaymentResult>;
+
+  refund(transactionId: string, amount: number): Promise<RefundResult>;
 }

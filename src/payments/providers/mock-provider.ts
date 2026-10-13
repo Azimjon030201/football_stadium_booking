@@ -1,14 +1,21 @@
 import { Injectable } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { PaymentProviderInterface } from './payment-provider.interface';
+import { v4 as uuidv4 } from 'uuid';
+import {
+  InitiatePaymentResult,
+  PaymentProviderInterface,
+} from './payment-provider.interface';
 
 @Injectable()
 export class MockProvider implements PaymentProviderInterface {
-  // amount va bookingId haqiqiy provayderlar (Click/Payme) uchun kerak; mockda ishlatilmaydi.
-  async initiate(
-    _amount: number,
-    _bookingId: string,
-  ): Promise<{ transactionId: string; status: string }> {
-    return { transactionId: `MOCK-${randomUUID()}`, status: 'PENDING' };
+  readonly name = 'MOCK' as const;
+
+  async initiate(_amount: number, _bookingId: string): Promise<InitiatePaymentResult> {
+    // Real provayderda tashqi API'ga so'rov ketadi va natija webhook orqali keladi.
+    // Mock: darhol SUCCESS.
+    return { transactionId: `mock-tx-${uuidv4()}`, status: 'SUCCESS' };
+  }
+
+  async refund(_transactionId: string, _amount: number) {
+    return { status: 'REFUNDED' as const }; // mock: refund darhol
   }
 }

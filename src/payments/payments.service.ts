@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { ErrorCodes } from '../common/constants/error-codes';
 import { PrismaService } from '../prisma/prisma.service';
 import { MockProvider } from './providers/mock-provider';
+import { WebhookDto } from './dto/webhook.dto';
 
 type PaymentRow = {
   id: string;
@@ -22,6 +23,12 @@ type PaymentRow = {
 
 @Injectable()
 export class PaymentsService {
+  findOne(id: string, user: { id: string; role: string; }) {
+    throw new Error('Method not implemented.');
+  }
+  handleWebhook(dto: WebhookDto) {
+    throw new Error('Method not implemented.');
+  }
   constructor(
     private readonly prisma: PrismaService,
     private readonly mockProvider: MockProvider,
