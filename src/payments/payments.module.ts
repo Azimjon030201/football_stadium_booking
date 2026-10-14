@@ -1,17 +1,11 @@
 import { Module } from '@nestjs/common';
-import { MockProvider } from './providers/mock-provider';
-import { PAYMENT_PROVIDER } from './payment.constants';
-import { PaymentController } from './payments.controller';
+import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
-import { WebhookSignatureGuard } from './webhook-signature.guard';
+import { MockPaymentProvider } from './providers/mock-provider';
 
 @Module({
-  controllers: [PaymentController],
-  providers: [
-    { provide: PAYMENT_PROVIDER, useClass: MockProvider }, // keyin: ClickProvider
-    PaymentsService,
-    WebhookSignatureGuard,
-  ],
-  exports: [PaymentsService], // BookingModule bekor qilishda refundForBooking() ishlatadi
+  controllers: [PaymentsController],
+  providers: [PaymentsService, MockPaymentProvider],
+  exports: [PaymentsService],
 })
-export class PaymentModule {}
+export class PaymentsModule {}

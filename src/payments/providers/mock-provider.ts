@@ -1,21 +1,30 @@
 import { Injectable } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
+import { ConfigService } from '@nestjs/config';
+import { PaymentProviderType } from '@prisma/client';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import {
-  InitiatePaymentResult,
-  PaymentProviderInterface,
+  InitiateProviderInput,
+  InitiateProviderResult,
+  PaymentProvider,
 } from './payment-provider.interface';
 
 @Injectable()
-export class MockProvider implements PaymentProviderInterface {
-  readonly name = 'MOCK' as const;
+export class MockPaymentProvider implements PaymentProvider {
+  readonly type = PaymentProviderType.MOCK;
 
-  async initiate(_amount: number, _bookingId: string): Promise<InitiatePaymentResult> {
-    // Real provayderda tashqi API'ga so'rov ketadi va natija webhook orqali keladi.
-    // Mock: darhol SUCCESS.
-    return { transactionId: `mock-tx-${uuidv4()}`, status: 'SUCCESS' };
+  constructor(private readonly config: ConfigService) {}
+
+  async initiate(_input: InitiateProviderInput): Promise<InitiateProviderResult> {
+    // Mock: natija webhook orqali keladi (Postman'dan qo'lda yuboriladi)
+    return { transactionId: `mock-${randomUUID()}`, redirectUrl: null };
   }
 
-  async refund(_transactionId: string, _amount: number) {
-    return { status: 'REFUNDED' as const }; // mock: refund darhol
+  verifyWebhookSignature(rawBody: Buffer, signature: string | undefined): boolean {
+    if (!signature || !rawBody) return false;
+    const secret = this.config.getOrThrow<string>('PAYMENT_WEBHOOK_SECRET');
+    const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+    const a = Buffer.from(expected);
+    const b = Buffer.from(signature);
+    return a.length === b.length && timingSafeEqual(a, b);
   }
 }

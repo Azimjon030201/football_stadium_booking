@@ -1,38 +1,48 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-// Quyidagi importlar SRS 31-bo'limdagi common/ papkasiga mos (yo'lni loyihangizga moslang)
+import {
+  Body, Controller, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Req, UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
-import { WebhookDto } from './dto/webhook.dto';
+import { PaymentWebhookDto } from './dto/payment-webhook.dto';
 import { PaymentsService } from './payments.service';
-import { WebhookSignatureGuard } from './webhook-signature.guard';
+import { plainToInstance } from 'class-transformer';
+import { validateOrReject } from 'class-validator';
 
-@ApiTags('payments')
 @Controller('payments')
-export class PaymentController {
-  constructor(private readonly payments: PaymentsService) {}
+export class PaymentsController {
+  constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post('initiate')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: "To'lovni boshlash" })
   initiate(@CurrentUser() user: { id: string }, @Body() dto: InitiatePaymentDto) {
-    return this.payments.initiate(user.id, dto.bookingId);
+    return this.paymentsService.initiate(user.id, dto);
   }
 
+  // Auth yo'q, HMAC imzo bilan himoyalangan. Imzo xom (raw) body ustida tekshiriladi:
+  // main.ts: NestFactory.create(AppModule, { rawBody: true })
   @Post('webhook/:provider')
   @HttpCode(200)
-  @UseGuards(WebhookSignatureGuard)
-  @ApiOperation({ summary: 'Provayder callback (server-to-server, HMAC)' })
-  webhook(@Param('provider') _provider: string, @Body() dto: WebhookDto) {
-    return this.payments.handleWebhook(dto);
+  async webhook(
+    @Param('provider') provider: string,
+    @Headers('x-signature') signature: string | undefined,
+    @Req() req: RawBodyRequest<Request>,
+  ) {
+    const dto = plainToInstance(PaymentWebhookDto, req.body);
+    try {
+      await validateOrReject(dto, { whitelist: true });
+    } catch {
+      throw new BadRequestException({ error: 'VALIDATION_ERROR' });
+    }
+    return this.paymentsService.handleWebhook(provider, req.rawBody as Buffer, signature, dto);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string; role: string }) {
-    return this.payments.findOne(id, user);
+  getById(@CurrentUser() user: { id: string; role: any }, @Param('id', ParseUUIDPipe) id: string) {
+    return this.paymentsService.getById(user, id);
   }
 }

@@ -1,8 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { PaymentProviderType } from '@prisma/client';
 
 export class InitiatePaymentDto {
-  @ApiProperty({ example: 'b1e0c1a2-0000-4000-8000-000000000001' })
   @IsUUID()
   bookingId: string;
+
+  // MVP'da default MOCK
+  @IsOptional()
+  @IsEnum(PaymentProviderType)
+  provider?: PaymentProviderType;
 }
