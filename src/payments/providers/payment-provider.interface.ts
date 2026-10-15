@@ -1,21 +1,18 @@
-import { PaymentProviderType } from '@prisma/client';
 
-export interface InitiateProviderInput {
+export interface InitiateParams {
   paymentId: string;
   bookingId: string;
-  amount: number;
+  amount: string;
   currency: string;
   idempotencyKey: string;
 }
 
-export interface InitiateProviderResult {
+export interface InitiateResult {
   transactionId: string;
-  redirectUrl?: string | null;
+  redirectUrl?: string;
 }
 
-// Strategy pattern (SRS 15.1): yangi provider = yangi klass, core logika o'zgarmaydi
-export interface PaymentProvider {
-  readonly type: PaymentProviderType;
-  initiate(input: InitiateProviderInput): Promise<InitiateProviderResult>;
-  verifyWebhookSignature(rawBody: Buffer, signature: string | undefined): boolean;
+export interface PaymentProviderInterface {
+  readonly name: 'MOCK' | 'CLICK' | 'PAYME' | 'UZUM' | 'STRIPE';
+  initiate(params: InitiateParams): Promise<InitiateResult>;
 }
