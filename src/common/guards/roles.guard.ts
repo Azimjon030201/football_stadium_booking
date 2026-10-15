@@ -5,14 +5,16 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { UserRole } from '@prisma/client';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { ErrorCodes } from '../constants/error-codes';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(
+    const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(
       ROLES_KEY,
       [context.getHandler(), context.getClass()],
     );
@@ -22,13 +24,20 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<{
-      user?: { role?: string };
+      user?: {
+        role?: UserRole;
+      };
     }>();
 
-    if (request.user?.role && requiredRoles.includes(request.user.role)) {
+    const role = request.user?.role;
+
+    if (role && requiredRoles.includes(role)) {
       return true;
     }
 
-    throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
+    throw new ForbiddenException({
+      error: ErrorCodes.FORBIDDEN_RESOURCE,
+      message: 'Bu amalni bajarishga ruxsatingiz yo‘q',
+    });
   }
 }

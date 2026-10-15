@@ -8,10 +8,14 @@ import { WebhookSignatureGuard } from './webhook-signature.guard';
 @Module({
   controllers: [PaymentController],
   providers: [
-    { provide: PAYMENT_PROVIDER, useClass: MockProvider }, // keyin: ClickProvider
+    MockProvider,
+    {
+      provide: PAYMENT_PROVIDER,
+      useExisting: MockProvider,
+    },
     PaymentsService,
     WebhookSignatureGuard,
   ],
-  exports: [PaymentsService], // BookingModule bekor qilishda refundForBooking() ishlatadi
+  exports: [PaymentsService],
 })
 export class PaymentModule {}
