@@ -1,14 +1,73 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { UserRole } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+import { ErrorCodes } from '../constants/error-codes';
 
-// TASK-05 (Dev1, Hafta 1): asosiy holat — shu bare guard yetarli.
-// Barcha himoyalangan endpoint'lar shu orqali o'tadi: @UseGuards(JwtAuthGuard)
-//
-// TODO (Dev2 TASK-12, Hafta 3): kengaytiring — har bir so'rovda
-// foydalanuvchi hali BLOCKED bo'lmaganini bazadan qayta tekshiring
-// (faqat login paytida tekshirish yetarli emas, chunki token amal
-// qilsa ham, foydalanuvchi keyinroq bloklangan bo'lishi mumkin).
-// Buning uchun canActivate() metodini override qiling va PrismaService'ni
-// constructor orqali inject qiling.
 @Injectable()
-export class JwtAuthGuard extends AuthGuard('jwt') {}
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  constructor(private readonly prisma: PrismaService) {
+    super();
+  }
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const authenticated = await super.canActivate(context);
+
+    if (!authenticated) {
+      return false;
+    }
+
+    const request = context.switchToHttp().getRequest<{
+      user?: {
+        userId?: string;
+        role?: UserRole;
+      };
+    }>();
+
+    const userId = request.user?.userId;
+
+    if (!userId) {
+      throw new UnauthorizedException({
+        error: ErrorCodes.UNAUTHORIZED,
+        message: 'Token orqali foydalanuvchi aniqlanmadi',
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        status: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!user || user.deletedAt || user.status === 'DELETED') {
+      throw new UnauthorizedException({
+        error: ErrorCodes.UNAUTHORIZED,
+        message: 'Foydalanuvchi mavjud emas yoki o‘chirilgan',
+      });
+    }
+
+    if (user.status === 'BLOCKED') {
+      throw new ForbiddenException({
+        error: ErrorCodes.USER_BLOCKED,
+        message: 'Hisobingiz bloklangan',
+      });
+    }
+
+    request.user = {
+      ...request.user,
+      userId: user.id,
+      role: user.role,
+    };
+
+    return true;
+  }
+}

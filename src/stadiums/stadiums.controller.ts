@@ -1,111 +1,127 @@
 import {
-  Body,
   Controller,
-  Delete,
   Get,
-  Param,
-  Patch,
   Post,
-  Query,
-  Req,
+  Body,
+  Patch,
+  Param,
+  Delete,
   UseGuards,
+  Req,
+  Query,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Request } from 'express';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { StadiumsService } from './stadiums.service';
 import { CreateStadiumDto } from './dto/create-stadium.dto';
 import { UpdateStadiumDto } from './dto/update-stadium.dto';
+import { QueryStadiumsDto } from './dto/query-stadiums.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { OwnershipGuard } from '../common/guards/ownership.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('Stadiums')
 @Controller('stadiums')
 export class StadiumsController {
-  constructor(private readonly stadiumsService: StadiumsService) {}
+  constructor(
+    private readonly stadiumsService: StadiumsService,
+  ) {}
 
-  @ApiOperation({ summary: 'Stadion yaratish' })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Req() req: any, @Body() dto: CreateStadiumDto) {
-    return this.stadiumsService.create(req.user.userId, dto);
-  }
-
-  @ApiOperation({ summary: "Stadionlar ro'yxati (qidiruv/filtr)" })
-  @Get()
-  findAll(
-    @Query('search') search?: string,
-    @Query('minPrice') minPrice?: number,
-    @Query('maxPrice') maxPrice?: number,
-    @Query('fieldType') fieldType?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Yangi stadion yaratish' })
+  create(
+    @Body() dto: CreateStadiumDto,
+    @Req() req: any,
   ) {
-    return this.stadiumsService.findAll({
-      search,
-      minPrice,
-      maxPrice,
-      fieldType,
-      page,
-      limit,
-    });
+    return this.stadiumsService.create(dto, req.user.userId);
   }
 
-  @ApiOperation({ summary: 'Stadion detali' })
+  @Get()
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Stadionlar ro'yxatini olish (pagination)",
+  })
+  findAll(
+    @Query() query: QueryStadiumsDto,
+    @Req() req: any,
+  ) {
+    return this.stadiumsService.findAll(query, req.user);
+  }
+
+  @Get('admin/stadiums')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Admin: stadionlar moderatsiyasi' })
+  getAdminStadiums(@Query('status') status?: string) {
+    return this.stadiumsService.getAdminStadiums(status);
+  }
+
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req: any) {
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Stadionni ID bo'yicha olish" })
+  findOne(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
     return this.stadiumsService.findOne(id, req.user);
   }
 
-  @ApiOperation({ summary: 'Stadionni tahrirlash' })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, OwnershipGuard)
+  @Roles('OWNER', 'ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Stadionni yangilash' })
   update(
     @Param('id') id: string,
-    @Req() req: any,
     @Body() dto: UpdateStadiumDto,
+    @Req() req: any,
   ) {
-    return this.stadiumsService.update(
-      id,
-      req.user.userId,
-      req.user.role,
-      dto,
-    );
+    return this.stadiumsService.update(id, dto, req.user);
   }
 
-  @ApiOperation({ summary: 'Moderatsiyaga yuborish' })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @Post(':id/submit')
-  submit(@Param('id') id: string, @Req() req: any) {
-    return this.stadiumsService.submit(id, req.user.userId);
-  }
-
-  @ApiOperation({ summary: 'Stadionni arxivlash (soft delete)' })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @Delete(':id')
-  archive(@Param('id') id: string, @Req() req: any) {
-    return this.stadiumsService.archive(id, req.user.userId, req.user.role);
-  }
-
-  @ApiOperation({ summary: 'Moderatsiya navbati (Admin)' })
-  @ApiBearerAuth()
+  @Patch('admin/stadiums/:id/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  @Get('admin/all')
-  findAllForAdmin(@Query('status') status?: string) {
-    return this.stadiumsService.findAllForAdmin(status);
-  }
-
-  @ApiOperation({ summary: 'Stadionni tasdiqlash (Admin)' })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('ADMIN')
-  @Patch('admin/:id/approve')
+  @ApiOperation({ summary: 'Admin: stadionni tasdiqlash' })
   approve(@Param('id') id: string) {
     return this.stadiumsService.approve(id);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, OwnershipGuard)
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Stadionni arxivlash (Soft delete)' })
+  remove(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    return this.stadiumsService.archive(id, req.user);
+  }
+
+  @Post(':id/submit')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Stadionni moderatsiyaga yuborish' })
+  submit(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    return this.stadiumsService.submit(id, req.user.userId);
   }
 }
