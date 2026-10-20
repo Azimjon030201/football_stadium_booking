@@ -1,133 +1,119 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { randomUUID } from 'crypto';
-// MOSLANG: import yo'llari
-import { ErrorCodes } from '../common/constants/error-codes';
-import { PrismaService } from '../prisma/prisma.service';
-import { MockProvider } from './providers/mock-provider';
-import { WebhookDto } from './dto/webhook.dto';
 
-type PaymentRow = {
-  id: string;
-  bookingId: string;
-  amount: Prisma.Decimal | number;
-  status: string;
-  transactionId: string | null;
-  idempotencyKey: string;
-};
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { AppException } from '../common/errors/app.exception';
+import { ErrorCode } from '../common/errors/error-codes';
+import { MockProvider } from './providers/mock-provider';
 
 @Injectable()
 export class PaymentsService {
-  findOne(id: string, user: { id: string; role: string; }) {
-    throw new Error('Method not implemented.');
-  }
-  handleWebhook(dto: WebhookDto) {
-    throw new Error('Method not implemented.');
-  }
   constructor(
     private readonly prisma: PrismaService,
     private readonly mockProvider: MockProvider,
-  ) {}
+  ) { }
 
-  async initiate(bookingId: string, userId: string) {
-    // TASK-04: bron mavjudmi, o'zinikimi
+  async initiatePayment(bookingId: string, userId: string) {
+    // 1) Mavjudlik
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { payment: true },
     });
-    if (!booking) throw new NotFoundException({ error: ErrorCodes.BOOKING_NOT_FOUND });
+
+    if (!booking) {
+      throw new AppException(
+        HttpStatus.NOT_FOUND,
+        ErrorCode.BOOKING_NOT_FOUND,
+        'Booking not found',
+      );
+    }
+
+    // 2) Egalik
     if (booking.userId !== userId) {
-      throw new ForbiddenException({ error: ErrorCodes.FORBIDDEN_RESOURCE });
+      throw new AppException(
+        HttpStatus.FORBIDDEN,
+        ErrorCode.FORBIDDEN_RESOURCE,
+        'You do not have access to this booking',
+      );
     }
 
-    // TASK-05: to'lov allaqachon bormi?
-    const existing = booking.payment;
-    if (existing) {
-      // idempotent: faol to'lov bo'lsa o'shani qaytaramiz
-      if (['INITIATED', 'PENDING'].includes(existing.status)) {
-        return this.toResponse(existing);
-      }
-      // SRS 15.3: FAILED bo'lsa qayta urinish mumkin (bookingId unique, shu sababli
-      // yangi qator emas, mavjud qator yangilanadi). Qolgan holatlar — rad.
-      if (existing.status !== 'FAILED') {
-        throw new ConflictException({ error: ErrorCodes.PAYMENT_ALREADY_PROCESSED });
-      }
-    }
-
-    // SRS 11.2: to'lov faqat PENDING bron uchun boshlanadi
+    // 3) Holat: faqat PENDING (tezkor xato xabari uchun)
     if (booking.status !== 'PENDING') {
-      throw new ConflictException({ error: ErrorCodes.BOOKING_INVALID_STATE });
+      throw this.invalidState(booking.status);
     }
 
-    // TASK-06: summa FAQAT bazadagi bron narxidan
-    const amount = Number(booking.price);
-    const result = await this.mockProvider.initiate(amount, booking.id);
+    // 4) Idempotency key backend tomonidan generatsiya qilinadi
+    const idempotencyKey = randomUUID();
 
-    try {
-      const payment = await this.prisma.$transaction(async (tx) => {
-        let saved: PaymentRow;
-        if (existing) {
-          // qayta urinish: faqat hali FAILED bo'lsa yangilaymiz (parallel so'rovdan himoya)
-          const upd = await tx.payment.updateMany({
-            where: { id: existing.id, status: 'FAILED' },
-            data: {
-              transactionId: result.transactionId,
-              status: 'PENDING',
-              idempotencyKey: randomUUID(),
-            },
-          });
-          if (upd.count === 0) {
-            throw new ConflictException({ error: ErrorCodes.PAYMENT_ALREADY_PROCESSED });
-          }
-          saved = await tx.payment.findUniqueOrThrow({ where: { id: existing.id } });
-        } else {
-          saved = await tx.payment.create({
-            data: {
-              bookingId: booking.id,
-              amount,
-              provider: 'MOCK',
-              transactionId: result.transactionId,
-              status: 'PENDING',
-              idempotencyKey: randomUUID(),
-            },
-          });
-        }
-
-        // SRS 11.2: PENDING -> PAYMENT_PENDING (payment bilan bir tranzaksiyada)
-        const b = await tx.booking.updateMany({
-          where: { id: booking.id, status: 'PENDING' },
+    // 5) Atomik: PENDING -> PAYMENT_PENDING + Payment(INITIATED)
+    const payment = await this.prisma.$transaction(
+      async (tx) => {
+        // Ikki parallel so'rov bo'lsa, faqat bittasi count=1 oladi
+        const updated = await tx.booking.updateMany({
+          where: { id: bookingId, userId, status: 'PENDING' },
           data: { status: 'PAYMENT_PENDING' },
         });
-        if (b.count === 0) {
-          throw new ConflictException({ error: ErrorCodes.BOOKING_INVALID_STATE });
+
+        if (updated.count === 0) {
+          throw this.invalidState('NOT_PENDING');
         }
-        return saved;
-      });
-      return this.toResponse(payment);
-    } catch (e) {
-      // parallel so'rovda yutqazgan tomon: g'olib yaratgan to'lovni qaytaramiz
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        const winner = await this.prisma.payment.findUnique({ where: { bookingId: booking.id } });
-        if (winner) return this.toResponse(winner);
-        throw new ConflictException({ error: ErrorCodes.PAYMENT_ALREADY_PROCESSED });
-      }
-      throw e;
-    }
+
+        // Payment.bookingId unique (1:1): qayta urinishda mavjudini yangilaymiz
+        return tx.payment.upsert({
+          where: { bookingId },
+          create: {
+            bookingId,
+            amount: booking.price,
+            currency: 'UZS',
+            provider: this.mockProvider.name,
+            status: 'INITIATED',
+            idempotencyKey,
+          },
+          update: {
+            amount: booking.price,
+            status: 'INITIATED',
+            idempotencyKey,
+            transactionId: null,
+          },
+        });
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        timeout: 10000,
+      },
+    );
+
+    // 6) Provider chaqiruvi transaction TASHQARISIDA (49-bo'lim tavsiyasi)
+    const result = await this.mockProvider.initiate({
+      paymentId: payment.id,
+      bookingId,
+      amount: payment.amount.toString(),
+      currency: payment.currency,
+      idempotencyKey,
+    });
+
+    const updatedPayment = await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { transactionId: result.transactionId, status: 'PENDING' },
+    });
+
+    return {
+      paymentId: updatedPayment.id,
+      bookingId,
+      amount: updatedPayment.amount,
+      currency: updatedPayment.currency,
+      status: updatedPayment.status,
+      idempotencyKey,
+      transactionId: result.transactionId,
+      redirectUrl: result.redirectUrl ?? null,
+    };
   }
 
-  private toResponse(p: PaymentRow) {
-    return {
-      paymentId: p.id,
-      bookingId: p.bookingId,
-      amount: Number(p.amount),
-      status: p.status,
-      transactionId: p.transactionId,
-      idempotencyKey: p.idempotencyKey,
-    };
+  private invalidState(current: string) {
+    return new AppException(
+      HttpStatus.BAD_REQUEST,
+      ErrorCode.BOOKING_INVALID_STATE,
+      `Booking status must be PENDING, current: ${current}`,
+    );
   }
 }

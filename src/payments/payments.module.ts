@@ -1,21 +1,12 @@
 import { Module } from '@nestjs/common';
-import { MockProvider } from './providers/mock-provider';
-import { PAYMENT_PROVIDER } from './payment.constants';
-import { PaymentController } from './payments.controller';
+import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
-import { WebhookSignatureGuard } from './webhook-signature.guard';
+import { MockProvider } from './providers/mock-provider';
 
+// Sinf nomi PaymentModule — app.module.ts shuni import qiladi (o'zgartirmaymiz).
 @Module({
-  controllers: [PaymentController],
-  providers: [
-    MockProvider,
-    {
-      provide: PAYMENT_PROVIDER,
-      useExisting: MockProvider,
-    },
-    PaymentsService,
-    WebhookSignatureGuard,
-  ],
+  controllers: [PaymentsController],
+  providers: [PaymentsService, MockProvider],
   exports: [PaymentsService],
 })
 export class PaymentModule {}

@@ -1,23 +1,26 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { MockProvider } from '../providers/mock-provider';
+import { MockProvider } from './mock-provider';
 import { PaymentsService } from '../payments.service';
 
 const mkBooking = (over: any = {}) => ({
-  id: 'b1', userId: 'u1', status: 'PENDING', price: '100000.00', payment: null, ...over,
+  id: 'b1', userId: 'u1', status: 'PENDING', price: '100000.00', ...over,
 });
 
-function setup(booking: any) {
+function setup(booking: any, updateCount = 1) {
   const tx: any = {
+    booking: { updateMany: jest.fn().mockResolvedValue({ count: updateCount }) },
     payment: {
-      create: jest.fn().mockImplementation(async ({ data }) => ({ id: 'p1', ...data })),
-      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      findUniqueOrThrow: jest.fn(),
+      upsert: jest.fn().mockImplementation(async ({ create }) => ({
+        id: 'p1', currency: 'UZS', amount: create.amount, ...create,
+      })),
     },
-    booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
   };
   const prisma: any = {
     booking: { findUnique: jest.fn().mockResolvedValue(booking) },
-    payment: { findUnique: jest.fn() },
+    payment: {
+      update: jest.fn().mockImplementation(async ({ data }) => ({
+        id: 'p1', amount: '100000.00', currency: 'UZS', ...data,
+      })),
+    },
     $transaction: jest.fn((fn: any) => fn(tx)),
   };
   const provider = new MockProvider();
@@ -25,34 +28,53 @@ function setup(booking: any) {
   return { svc: new PaymentsService(prisma, provider), prisma, tx, spy };
 }
 
-describe('PaymentsService.initiate', () => {
-  it('summani bazadagi narxdan oladi va booking PAYMENT_PENDING bo\'ladi', async () => {
-    const { svc, tx, spy } = setup(mkBooking());
-    const r = await svc.initiate('b1', 'u1');
-    expect(r.amount).toBe(100000);
+const codeOf = async (p: Promise<unknown>) => {
+  try { await p; } catch (e: any) { return { status: e.getStatus(), body: e.getResponse() }; }
+  return null;
+};
+
+describe('PaymentsService.initiatePayment', () => {
+  it('summani bazadagi narxdan oladi, booking PAYMENT_PENDING ga o\'tadi', async () => {
+    const { svc, tx, spy, prisma } = setup(mkBooking());
+    const r = await svc.initiatePayment('b1', 'u1');
+
+    expect(tx.booking.updateMany).toHaveBeenCalledWith({
+      where: { id: 'b1', userId: 'u1', status: 'PENDING' },
+      data: { status: 'PAYMENT_PENDING' },
+    });
+    expect(tx.payment.upsert.mock.calls[0][0].create.amount).toBe('100000.00');
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(prisma.payment.update).toHaveBeenCalled();
     expect(r.status).toBe('PENDING');
-    expect(spy).toHaveBeenCalledWith(100000, 'b1');
-    expect(tx.booking.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { status: 'PAYMENT_PENDING' } }),
-    );
+    expect(r.transactionId).toMatch(/^mock-tx-/);
   });
 
-  it('faol to\'lov bo\'lsa o\'shani qaytaradi (dublikat yo\'q)', async () => {
-    const payment = { id: 'p9', bookingId: 'b1', amount: 100000, status: 'PENDING', transactionId: 'MOCK-1', idempotencyKey: 'k' };
-    const { svc, tx } = setup(mkBooking({ status: 'PAYMENT_PENDING', payment }));
-    const r = await svc.initiate('b1', 'u1');
-    expect(r.paymentId).toBe('p9');
-    expect(tx.payment.create).not.toHaveBeenCalled();
+  it('bron topilmasa 404 BOOKING_NOT_FOUND', async () => {
+    const { svc } = setup(null);
+    const e = await codeOf(svc.initiatePayment('b1', 'u1'));
+    expect(e?.status).toBe(404);
+    expect((e?.body as any).error).toBe('BOOKING_NOT_FOUND');
   });
 
-  it('404 / 403 / 409', async () => {
-    await expect(setup(null).svc.initiate('x', 'u1')).rejects.toBeInstanceOf(NotFoundException);
-    await expect(setup(mkBooking()).svc.initiate('b1', 'other')).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(setup(mkBooking({ status: 'CONFIRMED' })).svc.initiate('b1', 'u1')).rejects.toBeInstanceOf(ConflictException);
+  it('boshqa foydalanuvchi broni uchun 403 FORBIDDEN_RESOURCE', async () => {
+    const { svc } = setup(mkBooking({ userId: 'other' }));
+    const e = await codeOf(svc.initiatePayment('b1', 'u1'));
+    expect(e?.status).toBe(403);
+    expect((e?.body as any).error).toBe('FORBIDDEN_RESOURCE');
   });
 
-  it('SUCCESS to\'lov bo\'lsa PAYMENT_ALREADY_PROCESSED', async () => {
-    const payment = { id: 'p9', bookingId: 'b1', amount: 1, status: 'SUCCESS', transactionId: 't', idempotencyKey: 'k' };
-    await expect(setup(mkBooking({ payment })).svc.initiate('b1', 'u1')).rejects.toBeInstanceOf(ConflictException);
+  it('bron PENDING bo\'lmasa 400 BOOKING_INVALID_STATE, provider chaqirilmaydi', async () => {
+    const { svc, spy } = setup(mkBooking({ status: 'CONFIRMED' }));
+    const e = await codeOf(svc.initiatePayment('b1', 'u1'));
+    expect(e?.status).toBe(400);
+    expect((e?.body as any).error).toBe('BOOKING_INVALID_STATE');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('parallel so\'rovda (updateMany count=0) 400 va provider chaqirilmaydi', async () => {
+    const { svc, spy } = setup(mkBooking(), 0);
+    const e = await codeOf(svc.initiatePayment('b1', 'u1'));
+    expect((e?.body as any).error).toBe('BOOKING_INVALID_STATE');
+    expect(spy).not.toHaveBeenCalled();
   });
 });
