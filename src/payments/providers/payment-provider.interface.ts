@@ -1,18 +1,18 @@
-export type ProviderPaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED';
 
-export interface InitiatePaymentResult {
-  transactionId: string;
-  status: ProviderPaymentStatus;
+export interface InitiateParams {
+  paymentId: string;
+  bookingId: string;
+  amount: string;
+  currency: string;
+  idempotencyKey: string;
 }
 
-export interface RefundResult {
-  status: 'REFUNDED' | 'FAILED';
+export interface InitiateResult {
+  transactionId: string;
+  redirectUrl?: string;
 }
 
 export interface PaymentProviderInterface {
-  readonly name: string;
-
-  initiate(amount: number, bookingId: string): Promise<InitiatePaymentResult>;
-
-  refund(transactionId: string, amount: number): Promise<RefundResult>;
+  readonly name: 'MOCK' | 'CLICK' | 'PAYME' | 'UZUM' | 'STRIPE';
+  initiate(params: InitiateParams): Promise<InitiateResult>;
 }
