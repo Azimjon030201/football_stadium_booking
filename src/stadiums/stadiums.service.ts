@@ -7,7 +7,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStadiumDto } from './dto/create-stadium.dto';
 import { UpdateStadiumDto } from './dto/update-stadium.dto';
-import { StadiumStatus } from '@prisma/client';
+import { QueryStadiumsDto } from './dto/query-stadiums.dto';
+import { Prisma, StadiumStatus } from '@prisma/client';
 
 @Injectable()
 export class StadiumsService {
@@ -23,23 +24,39 @@ export class StadiumsService {
     });
   }
 
-  async findAll(user?: { userId: string; role: string }) {
+  async findAll(query: QueryStadiumsDto, user?: { userId: string; role: string }) {
+    const { page, limit } = query;
+    let where: Prisma.StadiumWhereInput = { deletedAt: null };
+
     if (user?.role === 'ADMIN') {
-      return this.prisma.stadium.findMany({ where: { deletedAt: null } });
+      where = { deletedAt: null };
+    } else if (user?.userId) {
+      where = {
+        deletedAt: null,
+        OR: [{ status: StadiumStatus.ACTIVE }, { ownerId: user.userId }],
+      };
+    } else {
+      where = { deletedAt: null, status: StadiumStatus.ACTIVE };
     }
 
-    if (user?.userId) {
-      return this.prisma.stadium.findMany({
-        where: {
-          deletedAt: null,
-          OR: [{ status: StadiumStatus.ACTIVE }, { ownerId: user.userId }],
-        },
-      });
-    }
+    const [data, total] = await Promise.all([
+      this.prisma.stadium.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.stadium.count({ where }),
+    ]);
 
-    return this.prisma.stadium.findMany({
-      where: { status: StadiumStatus.ACTIVE, deletedAt: null },
-    });
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findOne(id: string, user?: { userId: string; role: string }) {
@@ -61,16 +78,16 @@ export class StadiumsService {
     return stadium;
   }
 
-  async update(id: string, dto: UpdateStadiumDto, userId: string) {
-    const stadium = await this.prisma.stadium.findUnique({ where: { id } });
+  async update(id: string, dto: UpdateStadiumDto, user: { userId: string; role: string }) {
+    const stadium = await this.prisma.stadium.findFirst({
+      where: { id, deletedAt: null },
+    });
 
     if (!stadium) {
       throw new NotFoundException({ error: 'STADIUM_NOT_FOUND' });
     }
 
-    if (stadium.ownerId !== userId) {
-      throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
-    }
+    this.assertCanManage(stadium.ownerId, user);
 
     return this.prisma.stadium.update({
       where: { id },
@@ -78,25 +95,30 @@ export class StadiumsService {
     });
   }
 
-  async remove(id: string, userId: string) {
-    const stadium = await this.prisma.stadium.findUnique({ where: { id } });
+  async archive(id: string, user: { userId: string; role: string }) {
+    const stadium = await this.prisma.stadium.findFirst({
+      where: { id, deletedAt: null },
+    });
 
     if (!stadium) {
       throw new NotFoundException({ error: 'STADIUM_NOT_FOUND' });
     }
 
-    if (stadium.ownerId !== userId) {
-      throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
-    }
+    this.assertCanManage(stadium.ownerId, user);
 
     return this.prisma.stadium.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: {
+        status: StadiumStatus.ARCHIVED,
+        deletedAt: new Date(),
+      },
     });
   }
 
   async submit(id: string, userId: string) {
-    const stadium = await this.prisma.stadium.findUnique({ where: { id } });
+    const stadium = await this.prisma.stadium.findFirst({
+      where: { id, deletedAt: null },
+    });
 
     if (!stadium) {
       throw new NotFoundException({ error: 'STADIUM_NOT_FOUND' });
@@ -112,7 +134,38 @@ export class StadiumsService {
 
     return this.prisma.stadium.update({
       where: { id },
+      data: { status: StadiumStatus.PENDING }, 
+    });
+  }
+
+  async getAdminStadiums(status?: string) {
+    return this.prisma.stadium.findMany({
+      where: status ? { status: status as StadiumStatus } : {},
+    });
+  }
+
+  async approve(id: string) {
+    const stadium = await this.prisma.stadium.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!stadium) {
+      throw new NotFoundException({ error: 'STADIUM_NOT_FOUND' });
+    }
+
+    if (stadium.status !== StadiumStatus.PENDING) {
+      throw new ConflictException({ error: 'STADIUM_INVALID_STATE' });
+    }
+
+    return this.prisma.stadium.update({
+      where: { id },
       data: { status: StadiumStatus.ACTIVE },
     });
+  }
+
+  private assertCanManage(ownerId: string, user: { userId: string; role: string }) {
+    if (user.role !== 'ADMIN' && user.userId !== ownerId) {
+      throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
+    }
   }
 }

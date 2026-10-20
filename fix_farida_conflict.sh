@@ -6,6 +6,11 @@
 set -euo pipefail
 BASE="${1:-dev}"
 
+command -v node >/dev/null || { echo "XATO: node topilmadi (npm bilan birga o'rnatilgan bo'lishi kerak)"; exit 1; }
+
+# Oldingi yarim qolgan merge bo'lsa, uni bekor qilamiz (skriptni qayta ishga tushirish xavfsiz)
+if [ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ]; then git merge --abort; fi
+
 git fetch origin
 git checkout farida
 git pull origin farida
@@ -15,14 +20,20 @@ git merge "origin/$BASE" --no-commit --no-ff || true   # conflict BO'LADI: src/m
 
 # 2) src/main.ts -> $BASE dagi versiya (Swagger, CORS, prefix 'api', AllExceptionsFilter) + helmet
 git checkout --theirs src/main.ts
-python3 - <<'PY'
-p='src/main.ts'; s=open(p).read()
-if "import helmet" not in s:
-    s=s.replace("import { NestFactory } from '@nestjs/core';","import { NestFactory } from '@nestjs/core';\nimport helmet from 'helmet';",1)
-if "app.use(helmet())" not in s:
-    s=s.replace("  app.setGlobalPrefix('api');","  app.setGlobalPrefix('api');\n  app.use(helmet());",1)
-open(p,'w').write(s)
-PY
+node - <<'JS'
+const fs = require('fs');
+let s = fs.readFileSync('src/main.ts', 'utf8');
+if (!s.includes("import helmet")) {
+  s = s.replace("import { NestFactory } from '@nestjs/core';",
+                "import { NestFactory } from '@nestjs/core';\nimport helmet from 'helmet';");
+}
+if (!s.includes("app.use(helmet())")) {
+  s = s.replace("  app.setGlobalPrefix('api');",
+                "  app.setGlobalPrefix('api');\n  app.use(helmet());");
+}
+fs.writeFileSync('src/main.ts', s);
+JS
+grep -q "import helmet" src/main.ts && grep -q "app.use(helmet())" src/main.ts || { echo "XATO: main.ts ga helmet qo'shilmadi"; exit 1; }
 
 # 3) src/payments/payments.module.ts -> Farida controller/service + app.module kutgan nom (PaymentModule)
 cat > src/payments/payments.module.ts <<'EOF_MODULE'
@@ -71,6 +82,8 @@ describe('MockProvider', () => {
     const r = await provider.initiate(params('k1'));
     expect(r.transactionId).toMatch(/^mock-tx-[0-9a-f-]{36}$/);
   });
+
+
 
   it('har chaqiriqda noyob transactionId', async () => {
     const a = await provider.initiate(params('k1'));

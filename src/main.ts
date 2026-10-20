@@ -1,45 +1,44 @@
-
-import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { ValidationError } from 'class-validator';
 import helmet from 'helmet';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { AppException } from './common/errors/app.exception';
-import { ErrorCode } from './common/errors/error-codes';
-
-function flatten(errors: ValidationError[], parent = ''): any[] {
-  return errors.flatMap((e) => {
-    const field = parent ? `${parent}.${e.property}` : e.property;
-    const own = e.constraints
-      ? [{ field, errors: Object.values(e.constraints) }]
-      : [];
-    return [...own, ...flatten(e.children ?? [], field)];
-  });
-}
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix('api');
   app.use(helmet());
 
-  app.useGlobalFilters(new HttpExceptionFilter());
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()) ?? true,
+    credentials: true,
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-      exceptionFactory: (errors) =>
-        new AppException(
-          400,
-          ErrorCode.VALIDATION_ERROR,
-          'Validation failed',
-          flatten(errors),
-        ),
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
 
-  await app.listen(process.env.PORT ?? 3000);
+  app.useGlobalFilters(new AllExceptionsFilter());
+
+  const config = new DocumentBuilder()
+    .setTitle('Football Stadium Booking API')
+    .setDescription('Football mini stadium booking platform backend')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
+  const port = Number(process.env.PORT) || 3000;
+  await app.listen(port);
 }
-bootstrap();
+
+void bootstrap();

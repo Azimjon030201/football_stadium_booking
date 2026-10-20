@@ -8,10 +8,8 @@ import { StadiumsModule } from './stadiums/stadiums.module';
 import { FieldsModule } from './fields/fields.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { BookingsModule } from './bookings/bookings.module';
-import { PaymentsModule } from './payments/payments.module';
+import { PaymentModule } from './payments/payments.module';
 
-// Yangi modul qo'shsangiz (Review, Favorite, Notification, Owner, Admin,
-// Audit, Cron — SRS'dagi kichik modullar), shu yerga import qiling.
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -23,7 +21,7 @@ import { PaymentsModule } from './payments/payments.module';
     FieldsModule,
     AvailabilityModule,
     BookingsModule,
-    PaymentsModule,
+    PaymentModule,
   ],
 })
 export class AppModule {}

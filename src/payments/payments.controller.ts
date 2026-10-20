@@ -8,7 +8,7 @@ import {
 } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
 import { InitiatePaymentDto } from './dto/initiate-payment.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('payments')
@@ -27,7 +27,7 @@ export class PaymentsController {
   @ApiResponse({ status: 404, description: 'BOOKING_NOT_FOUND' })
   initiate(
     @Body() dto: InitiatePaymentDto,
-    @CurrentUser('id') userId: string,
+    @CurrentUser('userId') userId: string,
   ) {
     return this.paymentsService.initiatePayment(dto.bookingId, userId);
   }

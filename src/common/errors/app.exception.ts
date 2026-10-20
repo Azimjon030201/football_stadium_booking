@@ -9,6 +9,6 @@ export class AppException extends HttpException {
     message: string,
     public readonly details?: unknown,
   ) {
-    super({ code, message, details }, status);
+    super({ error: code, message, details }, status);
   }
 }
