@@ -11,6 +11,7 @@ import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ErrorCodes } from '../common/constants/error-codes';
 
 @Injectable()
 export class AuthService {
@@ -28,7 +29,7 @@ export class AuthService {
 
     if (existing) {
       throw new ConflictException({
-        error: 'USER_ALREADY_EXISTS',
+        error: ErrorCodes.USER_ALREADY_EXISTS,
         message: "Bu email allaqachon ro'yxatdan o'tgan",
       });
     }
@@ -61,7 +62,7 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException({
-        error: 'AUTH_INVALID_CREDENTIALS',
+        error: ErrorCodes.AUTH_INVALID_CREDENTIALS,
       });
     }
 
@@ -72,7 +73,7 @@ export class AuthService {
 
     if (!passwordMatches) {
       throw new UnauthorizedException({
-        error: 'AUTH_INVALID_CREDENTIALS',
+        error: ErrorCodes.AUTH_INVALID_CREDENTIALS,
       });
     }
 
@@ -121,7 +122,7 @@ export class AuthService {
 
     if (!stored || stored.expiresAt < new Date()) {
       throw new UnauthorizedException({
-        error: 'AUTH_TOKEN_EXPIRED',
+        error: ErrorCodes.AUTH_TOKEN_EXPIRED,
       });
     }
 
@@ -133,7 +134,7 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException({
-        error: 'AUTH_INVALID_CREDENTIALS',
+        error: ErrorCodes.AUTH_INVALID_CREDENTIALS,
       });
     }
 
