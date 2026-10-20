@@ -10,8 +10,6 @@ import { AvailabilityModule } from './availability/availability.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { PaymentModule } from './payments/payments.module';
 
-// Yangi modul qo'shsangiz (Review, Favorite, Notification, Owner, Admin,
-// Audit, Cron — SRS'dagi kichik modullar), shu yerga import qiling.
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
