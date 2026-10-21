@@ -8,7 +8,7 @@ import { StadiumsModule } from './stadiums/stadiums.module';
 import { FieldsModule } from './fields/fields.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { BookingsModule } from './bookings/bookings.module';
-import { PaymentModule } from './payments/payments.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -21,7 +21,7 @@ import { PaymentModule } from './payments/payments.module';
     FieldsModule,
     AvailabilityModule,
     BookingsModule,
-    PaymentModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}
