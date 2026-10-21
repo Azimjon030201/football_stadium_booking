@@ -211,6 +211,8 @@ npx prisma generate
 npx prisma db seed
 ```
 
+`package.json` Prisma 6 uchun `prisma.seed` sozlamasida `ts-node prisma/seed.ts` runneridan foydalanadi. Seed `.env` faylini ham o‘qiydi; shell orqali oldindan berilgan environment qiymatlari ustun turadi. Docker Compose ishlatilganda backend konteyneridagi `postgres` hostname ishlatiladi.
+
 Agar `.env` file mavjud bo'lmasa, avval namuna fayldan nusxa oling:
 
 ```bash
@@ -232,7 +234,9 @@ Seed tomonidan yaratiladigan demo hisoblar (faqat lokal test uchun):
 | User | `user2@stadium.local` | `User123!` |
 | User | `user3@stadium.local` | `User123!` |
 
-Seed script idempotent bo'lib, takroriy ishga tushirilganda aynı email bilan duplikat user yoki duplicate stadium/field yaratmaydi. U `upsert` dan foydalanadi.
+Seed script idempotent bo‘lishi uchun mavjud demo email, stadium (owner + name), field (stadium + name) yozuvlarini avval tekshiradi va mavjudlarini qayta yaratmaydi. Mavjud foydalanuvchilarning paroli, roli yoki profili hamda mavjud stadion/maydon ma’lumotlari seed tomonidan qayta yozilmaydi. Working Hours uchun schema'dagi `@@unique([fieldId, dayOfWeek])` kalitiga mos `upsert` ishlatiladi; mavjud ish jadvali o‘zgartirilmaydi.
+
+Xavfsizlik: seed `NODE_ENV=production` bo‘lsa to‘xtaydi va `DATABASE_URL` hosti `localhost`, `127.0.0.1`, `::1`, `postgres` yoki `host.docker.internal` bo‘lmasa ham, standart holatda to‘xtaydi. `ALLOW_NON_LOCAL_DB=true` himoyani chetlab o‘tishi mumkin; uni faqat database aynan development/test uchun ekanini mustaqil tekshirganingizdan keyin qo‘ying. Hech qachon production bazada seed ishlatmang.
 
 ## G. Backendni ishga tushirish
 

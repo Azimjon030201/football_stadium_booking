@@ -7,7 +7,7 @@ import {
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient;
 
 const sampleUsers = [
   {
@@ -135,22 +135,81 @@ const dayPatterns = [
   { dayOfWeek: 6, openTime: '09:00', closeTime: '23:00' },
 ] as const;
 
-async function seedUsers() {
-  for (const user of sampleUsers) {
-    const passwordHash = await bcrypt.hash(user.password, 12);
+/**
+ * Load .env for direct `npm run seed` execution too.
+ * Existing shell variables take precedence over values in .env.
+ */
+function loadDotEnv(): void {
+  const fs = require('fs') as typeof import('fs');
+  const path = require('path') as typeof import('path');
+  const envPath = path.resolve(process.cwd(), '.env');
+  if (!fs.existsSync(envPath)) return;
 
-    await prisma.user.upsert({
+  for (const rawLine of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const separator = line.indexOf('=');
+    if (separator < 1) continue;
+
+    const key = line.slice(0, separator).trim();
+    let value = line.slice(separator + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+function assertSafeDatabaseTarget(): void {
+  if ((process.env.NODE_ENV || '').toLowerCase() === 'production') {
+    throw new Error(
+      'Seed production muhitida taqiqlangan. Faqat development/test database ishlating.',
+    );
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL topilmadi. Loyiha ildizidagi .env faylini tekshiring.');
+  }
+
+  let hostname: string;
+  try {
+    hostname = new URL(databaseUrl).hostname.toLowerCase();
+  } catch {
+    throw new Error('DATABASE_URL noto‘g‘ri formatda.');
+  }
+
+  const localHosts = new Set([
+    'localhost',
+    '127.0.0.1',
+    '::1',
+    'postgres',
+    'host.docker.internal',
+  ]);
+
+  if (!localHosts.has(hostname) && process.env.ALLOW_NON_LOCAL_DB !== 'true') {
+    throw new Error(
+      `Seed xavfsizlik sabab to‘xtatildi: DATABASE_URL host "${hostname}" local emas. ` +
+      'Faqat aniq tasdiqlangan development/test database uchun ALLOW_NON_LOCAL_DB=true ni ongli ravishda sozlang.',
+    );
+  }
+}
+
+async function seedUsers(): Promise<void> {
+  for (const user of sampleUsers) {
+    // Hash only when the demo account must be created. Existing accounts are not changed.
+    const existing = await prisma.user.findUnique({
       where: { email: user.email },
-      update: {
-        passwordHash,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        phone: user.phone,
-        role: user.role,
-        status: user.status,
-        isOwnerVerified: user.isOwnerVerified,
-      },
-      create: {
+      select: { id: true },
+    });
+    if (existing) continue;
+
+    const passwordHash = await bcrypt.hash(user.password, 12);
+    await prisma.user.create({
+      data: {
         email: user.email,
         passwordHash,
         firstName: user.firstName,
@@ -164,82 +223,73 @@ async function seedUsers() {
   }
 }
 
-async function seedStadiumsAndFields() {
+async function seedStadiumsAndFields(): Promise<void> {
   for (const stadiumTemplate of stadiumTemplates) {
     const owner = await prisma.user.findUnique({
       where: { email: stadiumTemplate.ownerEmail },
+      select: { id: true },
     });
 
     if (!owner) {
       throw new Error(
-        `Owner not found for stadium ${stadiumTemplate.name}: ${stadiumTemplate.ownerEmail}`,
+        `Owner topilmadi: ${stadiumTemplate.ownerEmail}. Avval seedUsers bajarilishi kerak.`,
       );
     }
 
-    const existingStadium = await prisma.stadium.findFirst({
+    // Stadium has no schema-level unique key for (ownerId, name), so use a
+    // sequential find-then-create rather than inventing a fake UUID for upsert.
+    let stadium = await prisma.stadium.findFirst({
       where: {
         ownerId: owner.id,
         name: stadiumTemplate.name,
+        deletedAt: null,
       },
       select: { id: true },
     });
 
-    const stadium = await prisma.stadium.upsert({
-      where: { id: existingStadium?.id ?? '00000000-0000-0000-0000-000000000000' },
-      update: {
-        description: stadiumTemplate.description,
-        address: stadiumTemplate.address,
-        latitude: stadiumTemplate.latitude,
-        longitude: stadiumTemplate.longitude,
-        phone: stadiumTemplate.phone,
-        status: StadiumStatus.ACTIVE,
-      },
-      create: {
-        ownerId: owner.id,
-        name: stadiumTemplate.name,
-        description: stadiumTemplate.description,
-        address: stadiumTemplate.address,
-        latitude: stadiumTemplate.latitude,
-        longitude: stadiumTemplate.longitude,
-        phone: stadiumTemplate.phone,
-        status: StadiumStatus.ACTIVE,
-      },
-    });
+    if (!stadium) {
+      stadium = await prisma.stadium.create({
+        data: {
+          ownerId: owner.id,
+          name: stadiumTemplate.name,
+          description: stadiumTemplate.description,
+          address: stadiumTemplate.address,
+          latitude: stadiumTemplate.latitude,
+          longitude: stadiumTemplate.longitude,
+          phone: stadiumTemplate.phone,
+          status: StadiumStatus.ACTIVE,
+        },
+        select: { id: true },
+      });
+    }
 
     for (const fieldTemplate of fieldTemplates) {
-      const existingField = await prisma.field.findFirst({
+      let field = await prisma.field.findFirst({
         where: {
           stadiumId: stadium.id,
           name: fieldTemplate.name,
+          deletedAt: null,
         },
         select: { id: true },
       });
 
-      const field = await prisma.field.upsert({
-        where: { id: existingField?.id ?? '00000000-0000-0000-0000-000000000000' },
-        update: {
-          fieldType: fieldTemplate.fieldType,
-          capacity: fieldTemplate.capacity,
-          size: fieldTemplate.size,
-          pricePerHour: fieldTemplate.pricePerHour,
-          weekendMultiplier: fieldTemplate.weekendMultiplier,
-          peakMultiplier: fieldTemplate.peakMultiplier,
-          description: fieldTemplate.description,
-          isActive: true,
-        },
-        create: {
-          stadiumId: stadium.id,
-          name: fieldTemplate.name,
-          fieldType: fieldTemplate.fieldType,
-          capacity: fieldTemplate.capacity,
-          size: fieldTemplate.size,
-          pricePerHour: fieldTemplate.pricePerHour,
-          weekendMultiplier: fieldTemplate.weekendMultiplier,
-          peakMultiplier: fieldTemplate.peakMultiplier,
-          description: fieldTemplate.description,
-          isActive: true,
-        },
-      });
+      if (!field) {
+        field = await prisma.field.create({
+          data: {
+            stadiumId: stadium.id,
+            name: fieldTemplate.name,
+            fieldType: fieldTemplate.fieldType,
+            capacity: fieldTemplate.capacity,
+            size: fieldTemplate.size,
+            pricePerHour: fieldTemplate.pricePerHour,
+            weekendMultiplier: fieldTemplate.weekendMultiplier,
+            peakMultiplier: fieldTemplate.peakMultiplier,
+            description: fieldTemplate.description,
+            isActive: true,
+          },
+          select: { id: true },
+        });
+      }
 
       for (const schedule of dayPatterns) {
         await prisma.workingHour.upsert({
@@ -249,11 +299,8 @@ async function seedStadiumsAndFields() {
               dayOfWeek: schedule.dayOfWeek,
             },
           },
-          update: {
-            openTime: schedule.openTime,
-            closeTime: schedule.closeTime,
-            isClosed: false,
-          },
+          // Do not overwrite schedules that a developer has already customized.
+          update: {},
           create: {
             fieldId: field.id,
             dayOfWeek: schedule.dayOfWeek,
@@ -267,34 +314,35 @@ async function seedStadiumsAndFields() {
   }
 }
 
-async function main() {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'Seed script is forbidden in production. Use only a local development/test database.',
-    );
-  }
+async function main(): Promise<void> {
+  loadDotEnv();
+  assertSafeDatabaseTarget();
+  prisma = new PrismaClient();
 
   await seedUsers();
   await seedStadiumsAndFields();
 
-  const userCount = await prisma.user.count();
-  const stadiumCount = await prisma.stadium.count();
-  const fieldCount = await prisma.field.count();
+  const [userCount, stadiumCount, fieldCount, workingHourCount] =
+    await Promise.all([
+      prisma.user.count(),
+      prisma.stadium.count(),
+      prisma.field.count(),
+      prisma.workingHour.count(),
+    ]);
 
   console.log(
-    `Seed complete. Users: ${userCount}, Stadiums: ${stadiumCount}, Fields: ${fieldCount}`,
+    `Seed yakunlandi. Database jami: Users=${userCount}, Stadiums=${stadiumCount}, Fields=${fieldCount}, WorkingHours=${workingHourCount}`,
   );
   console.log(
-    'Demo credentials: admin@stadium.local / Admin123!, owner1@stadium.local / Owner123!, user1@stadium.local / User123!',
+    'Demo hisoblar faqat lokal development/test uchun. Login ma’lumotlari README.md dagi "Seed ma’lumotlari" bo‘limida.',
   );
 }
 
 main()
-  .catch((error) => {
-    console.error('Seed failed');
-    console.error(error);
-    process.exit(1);
+  .catch((error: unknown) => {
+    console.error('Seed bajarilmadi:', error instanceof Error ? error.message : error);
+    process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    if (prisma) await prisma.$disconnect();
   });
