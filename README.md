@@ -195,6 +195,49 @@ npx prisma migrate dev
 
 `prisma-dev-guard.js` skripti `DATABASE_URL` va `NODE_ENV` ni tekshiradi. Agar host production/remote bo'lsa yoki `NODE_ENV=production` bo'lsa, xavfli migrate dev buyruqlari bloklanadi.
 
+### Seed ma'lumotlari
+
+Proyektida `prisma/seed.ts` fayli mavjud va local development/test bazasi uchun boshlang'ich ma'lumotlarni yaratadi. Seed maqsadi:
+
+- admin, owner va oddiy userlar yaratish
+- aktiv stadiumlar va maydonlar yaratish
+- har bir field uchun full working hours sozlash
+- bir xil ma'lumotlarni takroran kiritmaslik
+
+Seed ni quyidagicha ishga tushiring:
+
+```bash
+npx prisma generate
+npx prisma db seed
+```
+
+`package.json` Prisma 6 uchun `prisma.seed` sozlamasida `ts-node prisma/seed.ts` runneridan foydalanadi. Seed `.env` faylini ham o‘qiydi; shell orqali oldindan berilgan environment qiymatlari ustun turadi. Docker Compose ishlatilganda backend konteyneridagi `postgres` hostname ishlatiladi.
+
+Agar `.env` file mavjud bo'lmasa, avval namuna fayldan nusxa oling:
+
+```bash
+Copy-Item .env.example .env
+# yoki
+cp .env.example .env
+```
+
+Seed faqat local development / test bazasida ishlatilishi lozim. Production database'ga test ma'lumotlarini kiritmang. Seed script `NODE_ENV=production` bo'lganda xatolik chiqaradi.
+
+Seed tomonidan yaratiladigan demo hisoblar (faqat lokal test uchun):
+
+| Rol | Email | Parol |
+|---|---|---|
+| Admin | `admin@stadium.local` | `Admin123!` |
+| Owner | `owner1@stadium.local` | `Owner123!` |
+| Owner | `owner2@stadium.local` | `Owner123!` |
+| User | `user1@stadium.local` | `User123!` |
+| User | `user2@stadium.local` | `User123!` |
+| User | `user3@stadium.local` | `User123!` |
+
+Seed script idempotent bo‘lishi uchun mavjud demo email, stadium (owner + name), field (stadium + name) yozuvlarini avval tekshiradi va mavjudlarini qayta yaratmaydi. Mavjud foydalanuvchilarning paroli, roli yoki profili hamda mavjud stadion/maydon ma’lumotlari seed tomonidan qayta yozilmaydi. Working Hours uchun schema'dagi `@@unique([fieldId, dayOfWeek])` kalitiga mos `upsert` ishlatiladi; mavjud ish jadvali o‘zgartirilmaydi.
+
+Xavfsizlik: seed `NODE_ENV=production` bo‘lsa to‘xtaydi va `DATABASE_URL` hosti `localhost`, `127.0.0.1`, `::1`, `postgres` yoki `host.docker.internal` bo‘lmasa ham, standart holatda to‘xtaydi. `ALLOW_NON_LOCAL_DB=true` himoyani chetlab o‘tishi mumkin; uni faqat database aynan development/test uchun ekanini mustaqil tekshirganingizdan keyin qo‘ying. Hech qachon production bazada seed ishlatmang.
+
 ## G. Backendni ishga tushirish
 
 Avval dependency'larni o'rnating:
