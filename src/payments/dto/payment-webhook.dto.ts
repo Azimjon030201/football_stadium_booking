@@ -1,8 +1,11 @@
-import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNumber, IsString, IsUUID } from 'class-validator';
 
 export class PaymentWebhookDto {
   @IsString()
   transactionId: string;
+
+  @IsUUID()
+  bookingId: string;
 
   @IsIn(['SUCCESS', 'FAILED'])
   status: 'SUCCESS' | 'FAILED';
@@ -10,7 +13,6 @@ export class PaymentWebhookDto {
   @IsNumber()
   amount: number;
 
-  @IsOptional()
   @IsString()
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
