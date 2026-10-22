@@ -17,6 +17,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:booking-conflict": "jest --config ./test/jest-e2e.json --runInBand --runTestsByPath ./test/booking-conflict.e2e-spec.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "node scripts/prisma-dev-guard.js && prisma migrate dev",
     "prisma:migrate:create": "node scripts/prisma-dev-guard.js && prisma migrate dev --create-only",
