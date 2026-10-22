@@ -1,20 +1,48 @@
-import { IsEnum, IsInt, IsOptional, IsPositive, Length } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { FieldType } from '@prisma/client';
+import {
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsPositive,
+  IsString,
+  Length,
+  Max,
+  ValidateIf,
+} from 'class-validator';
 
-// Batafsil: Dev4 qo'llanma, 6-BOB, TASK-01, TASK-06
 export class CreateFieldDto {
+  @ApiProperty({ example: 'Asosiy maydon' })
+  @IsString()
   @Length(1, 100)
-  name: string;
+  name!: string;
 
-  @IsEnum(['INDOOR', 'OUTDOOR', 'NATURAL_GRASS', 'ARTIFICIAL_GRASS'])
-  fieldType: string;
+  @ApiProperty({
+    enum: FieldType,
+    example: FieldType.ARTIFICIAL_GRASS,
+  })
+  @IsEnum(FieldType)
+  fieldType!: FieldType;
 
+  @ApiProperty({ example: 12 })
   @IsInt()
   @IsPositive()
-  capacity: number;
+  @Max(2147483647)
+  capacity!: number;
 
-  @IsOptional()
+  @ApiPropertyOptional({ example: '20x40' })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 100)
   size?: string;
 
+  @ApiProperty({ example: 150000 })
+  @IsNumber({
+    allowNaN: false,
+    allowInfinity: false,
+    maxDecimalPlaces: 2,
+  })
   @IsPositive()
-  pricePerHour: number;
+  @Max(99999999.99)
+  pricePerHour!: number;
 }
