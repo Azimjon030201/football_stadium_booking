@@ -1,140 +1,51 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { WebhookDto } from './dto/webhook.dto';
-import { MockProvider } from './providers/mock-provider';
 
 @Injectable()
 export class PaymentsService {
-  private readonly logger = new Logger(PaymentsService.name);
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly provider: MockProvider,
-  ) {}
+  // ... initiate(), handleWebhook() boshqa vazifalarda
 
-  async initiatePayment(bookingId: string, userId: string) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-    });
-
-    if (!booking) {
-      throw new NotFoundException({
-        error: 'BOOKING_NOT_FOUND',
-        message: 'Bron topilmadi',
-      });
-    }
-
-    if (booking.userId !== userId) {
-      throw new ForbiddenException({
-        error: 'FORBIDDEN_RESOURCE',
-        message: 'Bu bron sizga tegishli emas',
-      });
-    }
-
-    if (booking.status !== 'PENDING') {
-      throw new BadRequestException({
-        error: 'BOOKING_INVALID_STATE',
-        message: 'Bron to‘lovni boshlash holatida emas',
-      });
-    }
-
-    // Narx foydalanuvchidan emas, bazadagi brondan olinadi.
-    const amount = booking.price.toString();
-
-    const payment = await this.prisma.$transaction(async (tx) => {
-      // Parallel so‘rovlardan faqat bittasi holatni o‘zgartira oladi.
-      const updated = await tx.booking.updateMany({
-        where: {
-          id: bookingId,
-          userId,
-          status: 'PENDING',
+  async findOne(id: string, userId: string, role: UserRole) {
+    // Payment'da userId yo'q — egalik Booking orqali (nested) tekshiriladi.
+    // Owner uchun yana Booking -> Field -> Stadium.ownerId zanjiri kerak (SRS 4.2).
+    const payment = await this.prisma.payment.findUnique({
+      where: { id },
+      include: {
+        booking: {
+          select: {
+            userId: true,
+            field: { select: { stadium: { select: { ownerId: true } } } },
+          },
         },
-        data: {
-          status: 'PAYMENT_PENDING',
-        },
-      });
-
-      if (updated.count !== 1) {
-        throw new BadRequestException({
-          error: 'BOOKING_INVALID_STATE',
-          message: 'Bron holati o‘zgargan yoki to‘lov boshlangan',
-        });
-      }
-
-      return tx.payment.upsert({
-        where: { bookingId },
-        create: {
-          bookingId,
-          amount,
-          currency: 'UZS',
-          provider: this.provider.name,
-          status: 'INITIATED',
-          idempotencyKey: randomUUID(),
-        },
-        update: {},
-      });
-    });
-
-    const result = await this.provider.initiate({
-      paymentId: payment.id,
-      bookingId,
-      amount: payment.amount.toString(),
-      currency: payment.currency,
-      idempotencyKey: payment.idempotencyKey,
-    });
-
-    const updatedPayment = await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        transactionId: result.transactionId,
-        status: 'PENDING',
       },
     });
 
-    return {
-      ...updatedPayment,
-      ...(result.redirectUrl
-        ? { redirectUrl: result.redirectUrl }
-        : {}),
-    };
-  }
-
-  async handleWebhook(dto: WebhookDto) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { idempotencyKey: dto.idempotencyKey },
-    });
-
     if (!payment) {
-      throw new NotFoundException({
-        error: 'PAYMENT_NOT_FOUND',
-        message: 'Payment not found',
-      });
+      throw new NotFoundException({ error: 'PAYMENT_NOT_FOUND' });
     }
 
-    if (
-      payment.status === 'SUCCESS' ||
-      payment.status === 'FAILED'
-    ) {
-      this.logger.warn(
-        `Duplicate webhook ignored: key=${dto.idempotencyKey}, status=${payment.status}`,
-      );
+    const isAdmin = role === UserRole.ADMIN;
+    const isBookingOwner = payment.booking.userId === userId; // to'lovni qilgan User
+    const isStadiumOwner = payment.booking.field.stadium.ownerId === userId; // o'z stadioni bo'yicha
 
-      return {
-        received: true,
-        alreadyProcessed: true,
-      };
+    if (!isAdmin && !isBookingOwner && !isStadiumOwner) {
+      throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
     }
 
-    // TODO (9-vazifa):
-    // Payment.status va Booking.status ni transaction ichida yangilash.
-
-    return { received: true };
+    // idempotencyKey va ichki booking obyektini oshkor qilmaymiz
+    return {
+      id: payment.id,
+      bookingId: payment.bookingId,
+      amount: payment.amount,
+      currency: payment.currency,
+      provider: payment.provider,
+      transactionId: payment.transactionId,
+      status: payment.status,
+      createdAt: payment.createdAt,
+      updatedAt: payment.updatedAt,
+    };
   }
 }
