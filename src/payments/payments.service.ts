@@ -5,23 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
-import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { MockProvider } from './providers/mock-provider';
-<<<<<<< HEAD
 import { PaymentErrors } from './payments.errors';
-=======
->>>>>>> 13ef22a5adbdd6b85794175161789f98cb8f65cd
+import { MockProvider } from './providers/mock-provider';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
-<<<<<<< HEAD
     private readonly provider: MockProvider = new MockProvider(),
-=======
-    private readonly provider: MockProvider,
->>>>>>> 13ef22a5adbdd6b85794175161789f98cb8f65cd
   ) {}
 
   async initiatePayment(bookingId: string, userId: string) {
@@ -30,16 +22,24 @@ export class PaymentsService {
     });
 
     if (!booking) {
-<<<<<<< HEAD
-      throw new NotFoundException({ error: PaymentErrors.BOOKING_NOT_FOUND });
+      throw new NotFoundException({
+        error: PaymentErrors.BOOKING_NOT_FOUND,
+        message: 'Bron topilmadi',
+      });
     }
 
     if (booking.userId !== userId) {
-      throw new ForbiddenException({ error: PaymentErrors.FORBIDDEN_RESOURCE });
+      throw new ForbiddenException({
+        error: PaymentErrors.FORBIDDEN_RESOURCE,
+        message: 'Bu bron sizga tegishli emas',
+      });
     }
 
     if (booking.status !== 'PENDING') {
-      throw new BadRequestException({ error: PaymentErrors.BOOKING_INVALID_STATE });
+      throw new BadRequestException({
+        error: PaymentErrors.BOOKING_INVALID_STATE,
+        message: 'Bron to‘lovni boshlash holatida emas',
+      });
     }
 
     return this.prisma.$transaction(async (tx: any) => {
@@ -49,10 +49,16 @@ export class PaymentsService {
       });
 
       if (updateResult.count !== 1) {
-        throw new BadRequestException({ error: PaymentErrors.BOOKING_INVALID_STATE });
+        throw new BadRequestException({
+          error: PaymentErrors.BOOKING_INVALID_STATE,
+          message: 'Bron holati o‘zgargan yoki to‘lov boshlangan',
+        });
       }
 
-      const amount = typeof booking.price === 'string' ? booking.price : booking.price.toString();
+      const amount =
+        typeof booking.price === 'string'
+          ? booking.price
+          : booking.price.toString();
 
       const payment = await tx.payment.upsert({
         where: { bookingId },
@@ -80,7 +86,10 @@ export class PaymentsService {
         idempotencyKey: payment.idempotencyKey,
       });
 
-      const paymentUpdateClient = tx?.payment?.update ? tx.payment : this.prisma.payment;
+      const paymentUpdateClient = tx?.payment?.update
+        ? tx.payment
+        : this.prisma.payment;
+
       await paymentUpdateClient.update({
         where: { id: payment.id },
         data: {
@@ -95,91 +104,6 @@ export class PaymentsService {
         transactionId: providerResult.transactionId,
       };
     });
-=======
-      throw new NotFoundException({
-        error: 'BOOKING_NOT_FOUND',
-        message: 'Bron topilmadi',
-      });
-    }
-
-    if (booking.userId !== userId) {
-      throw new ForbiddenException({
-        error: 'FORBIDDEN_RESOURCE',
-        message: 'Bu bron sizga tegishli emas',
-      });
-    }
-
-    if (booking.status !== 'PENDING') {
-      throw new BadRequestException({
-        error: 'BOOKING_INVALID_STATE',
-        message: 'Bron to‘lovni boshlash holatida emas',
-      });
-    }
-
-    const payment = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.booking.updateMany({
-        where: {
-          id: bookingId,
-          userId,
-          status: 'PENDING',
-        },
-        data: {
-          status: 'PAYMENT_PENDING',
-        },
-      });
-
-      if (updated.count !== 1) {
-        throw new BadRequestException({
-          error: 'BOOKING_INVALID_STATE',
-          message: 'Bron holati o‘zgargan yoki to‘lov boshlangan',
-        });
-      }
-
-      return tx.payment.upsert({
-        where: { bookingId },
-        create: {
-          bookingId,
-          amount: booking.price.toString(),
-          currency: 'UZS',
-          provider: this.provider.name,
-          status: 'INITIATED',
-          idempotencyKey: randomUUID(),
-        },
-        update: {},
-      });
-    });
-
-    const result = await this.provider.initiate({
-      paymentId: payment.id,
-      bookingId: payment.bookingId,
-      amount: payment.amount.toString(),
-      currency: payment.currency,
-      idempotencyKey: payment.idempotencyKey,
-    });
-
-    const updatedPayment = await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        transactionId: result.transactionId,
-        status: 'PENDING',
-      },
-    });
-
-    return {
-      id: updatedPayment.id,
-      bookingId: updatedPayment.bookingId,
-      amount: updatedPayment.amount,
-      currency: updatedPayment.currency,
-      provider: updatedPayment.provider,
-      transactionId: updatedPayment.transactionId,
-      status: updatedPayment.status,
-      createdAt: updatedPayment.createdAt,
-      updatedAt: updatedPayment.updatedAt,
-      ...(result.redirectUrl
-        ? { redirectUrl: result.redirectUrl }
-        : {}),
-    };
->>>>>>> 13ef22a5adbdd6b85794175161789f98cb8f65cd
   }
 
   async findOne(id: string, userId: string, role: UserRole) {
@@ -205,7 +129,7 @@ export class PaymentsService {
 
     if (!payment) {
       throw new NotFoundException({
-        error: 'PAYMENT_NOT_FOUND',
+        error: PaymentErrors.PAYMENT_NOT_FOUND,
         message: 'To‘lov topilmadi',
       });
     }
@@ -218,7 +142,7 @@ export class PaymentsService {
 
     if (!isAdmin && !isBookingOwner && !isStadiumOwner) {
       throw new ForbiddenException({
-        error: 'FORBIDDEN_RESOURCE',
+        error: PaymentErrors.FORBIDDEN_RESOURCE,
         message: 'Bu to‘lovni ko‘rishga ruxsat yo‘q',
       });
     }
