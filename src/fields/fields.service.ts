@@ -1,47 +1,177 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFieldDto } from './dto/create-field.dto';
 import { UpdateFieldDto } from './dto/update-field.dto';
 import { WorkingHourDto } from './dto/working-hour.dto';
 
-// Batafsil: Dev4 qo'llanma, 6-BOB. Har metod — bitta TASK'ga mos.
-// DIQQAT: Field modelida ownerId YO'Q — egalik field.stadium.ownerId
-// orqali (nested) tekshiriladi.
 @Injectable()
 export class FieldsService {
   constructor(private prisma: PrismaService) {}
 
-  // TASK-01: POST /stadiums/:stadiumId/fields
   async create(stadiumId: string, userId: string, role: string, dto: CreateFieldDto) {
-    throw new Error('TODO (Dev4 TASK-01): create() implement qilinmagan');
+    const stadium = await this.prisma.stadium.findFirst({
+      where: { id: stadiumId, deletedAt: null },
+    });
+
+    if (!stadium) {
+      throw new NotFoundException({ error: 'STADIUM_NOT_FOUND' });
+    }
+
+    if (role !== 'ADMIN' && stadium.ownerId !== userId) {
+      throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
+    }
+
+    return this.prisma.field.create({
+      data: {
+        ...dto,
+        fieldType: dto.fieldType as any,
+        stadiumId,
+        pricePerHour: new Prisma.Decimal(dto.pricePerHour.toString()),
+      },
+    });
   }
 
-  // TASK-02: GET /stadiums/:stadiumId/fields
   async findByStadium(stadiumId: string) {
-    throw new Error('TODO (Dev4 TASK-02): findByStadium() implement qilinmagan');
+    const stadium = await this.prisma.stadium.findFirst({
+      where: { id: stadiumId, deletedAt: null },
+    });
+
+    if (!stadium) {
+      throw new NotFoundException({ error: 'STADIUM_NOT_FOUND' });
+    }
+
+    return this.prisma.field.findMany({
+      where: { stadiumId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  // TASK-03: GET /fields/:id
   async findOne(id: string) {
-    throw new Error('TODO (Dev4 TASK-03): findOne() implement qilinmagan');
+    const field = await this.prisma.field.findFirst({
+      where: { id, deletedAt: null },
+      include: { stadium: true },
+    });
+
+    if (!field) {
+      throw new NotFoundException({ error: 'FIELD_NOT_FOUND' });
+    }
+
+    return field;
   }
 
-  // TASK-04, TASK-07 (Hafta 2): PATCH /fields/:id (shu jumladan isActive)
   async update(id: string, userId: string, role: string, dto: UpdateFieldDto) {
-    throw new Error('TODO (Dev4 TASK-04): update() implement qilinmagan');
+    const field = await this.prisma.field.findFirst({
+      where: { id, deletedAt: null },
+      include: { stadium: true },
+    });
+
+    if (!field) {
+      throw new NotFoundException({ error: 'FIELD_NOT_FOUND' });
+    }
+
+    if (role !== 'ADMIN' && field.stadium.ownerId !== userId) {
+      throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
+    }
+
+    const data: Prisma.FieldUpdateInput = { ...dto } as Prisma.FieldUpdateInput;
+
+    if (dto.pricePerHour !== undefined) {
+      data.pricePerHour = new Prisma.Decimal(dto.pricePerHour.toString());
+    }
+
+    return this.prisma.field.update({
+      where: { id },
+      data,
+    });
   }
 
-  // TASK-05: PUT /fields/:id/working-hours — UPSERT ishlatilishi shart
   async setWorkingHours(id: string, userId: string, role: string, hours: WorkingHourDto[]) {
-    throw new Error('TODO (Dev4 TASK-05): setWorkingHours() implement qilinmagan');
+    const field = await this.prisma.field.findFirst({
+      where: { id, deletedAt: null },
+      include: { stadium: true },
+    });
+
+    if (!field) {
+      throw new NotFoundException({ error: 'FIELD_NOT_FOUND' });
+    }
+
+    if (role !== 'ADMIN' && field.stadium.ownerId !== userId) {
+      throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
+    }
+
+    if (!Array.isArray(hours)) {
+      throw new ConflictException({ error: 'VALIDATION_ERROR' });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const hour of hours) {
+        await tx.workingHour.upsert({
+          where: {
+            fieldId_dayOfWeek: {
+              fieldId: id,
+              dayOfWeek: hour.dayOfWeek,
+            },
+          },
+          update: {
+            openTime: hour.openTime ?? null,
+            closeTime: hour.closeTime ?? null,
+            isClosed: hour.isClosed,
+          },
+          create: {
+            fieldId: id,
+            dayOfWeek: hour.dayOfWeek,
+            openTime: hour.openTime ?? null,
+            closeTime: hour.closeTime ?? null,
+            isClosed: hour.isClosed,
+          },
+        });
+      }
+    });
+
+    return { updated: true, fieldId: id, count: hours.length };
   }
 
   async getWorkingHours(id: string) {
-    throw new Error('TODO (Dev4 TASK-05): getWorkingHours() implement qilinmagan');
+    const field = await this.prisma.field.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!field) {
+      throw new NotFoundException({ error: 'FIELD_NOT_FOUND' });
+    }
+
+    return this.prisma.workingHour.findMany({
+      where: { fieldId: id },
+      orderBy: { dayOfWeek: 'asc' },
+    });
   }
 
-  // TASK-11 (Hafta 3): DELETE /fields/:id — soft delete
   async remove(id: string, userId: string, role: string) {
-    throw new Error('TODO (Dev4 TASK-11): remove() implement qilinmagan');
+    const field = await this.prisma.field.findFirst({
+      where: { id, deletedAt: null },
+      include: { stadium: true },
+    });
+
+    if (!field) {
+      throw new NotFoundException({ error: 'FIELD_NOT_FOUND' });
+    }
+
+    if (role !== 'ADMIN' && field.stadium.ownerId !== userId) {
+      throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
+    }
+
+    return this.prisma.field.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        isActive: false,
+      },
+    });
   }
 }
