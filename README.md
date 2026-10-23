@@ -213,6 +213,18 @@ npx prisma db seed
 
 `package.json` Prisma 6 uchun `prisma.seed` sozlamasida `ts-node prisma/seed.ts` runneridan foydalanadi. Seed `.env` faylini ham o‘qiydi; shell orqali oldindan berilgan environment qiymatlari ustun turadi. Docker Compose ishlatilganda backend konteyneridagi `postgres` hostname ishlatiladi.
 
+### Postman collection va seed dokumentatsiyasi
+
+Frontend dasturchilar uchun tayyorlangan Postman collection fayli:
+
+- `postman/Football-Stadium-Booking.postman_collection.json`
+
+Seed ma'lumotlari va login namunalari uchun hujjat:
+
+- `postman/SEED_DATA.md`
+
+Import qilish uchun Postman'da Import -> File tanlang, so'ngra yuqoridagi JSON faylini tanlang. Base URL sifatida `http://localhost:3000` ishlating.
+
 Agar `.env` file mavjud bo'lmasa, avval namuna fayldan nusxa oling:
 
 ```bash
