@@ -1,5 +1,10 @@
 import {
+  BookingStatus,
   FieldType,
+  NotificationType,
+  PaymentProviderType,
+  PaymentStatus,
+  Prisma,
   PrismaClient,
   StadiumStatus,
   UserRole,
@@ -9,7 +14,7 @@ import * as bcrypt from 'bcrypt';
 
 let prisma: PrismaClient;
 
-const sampleUsers = [
+const demoUsers = [
   {
     email: 'admin@stadium.local',
     password: 'Admin123!',
@@ -76,8 +81,8 @@ const stadiumTemplates = [
   {
     ownerEmail: 'owner1@stadium.local',
     name: 'Tashkent Arena',
-    description: 'Markaziy joylashgan yengil futbol stadioni',
-    address: 'Tashkent, Yunusobod kochasi 12',
+    description: 'Markaziy joylashgan zamonaviy futbol va mini-stadion kompleksi.',
+    address: 'Toshkent shahri, Yunusobod ko‘chasi 12',
     latitude: 41.333333,
     longitude: 69.279999,
     phone: '+998711000001',
@@ -85,8 +90,8 @@ const stadiumTemplates = [
   {
     ownerEmail: 'owner1@stadium.local',
     name: 'Green Valley Stadium',
-    description: 'Tabiatga yaqin, zamonaviy maydonlar',
-    address: 'Tashkent, Qibray kochasi 24',
+    description: 'Tabiatga yaqin, trening va amaliy uchrashuvlar uchun mo‘ljallangan maydonlar.',
+    address: 'Toshkent shahri, Qibray ko‘chasi 24',
     latitude: 41.269444,
     longitude: 69.220833,
     phone: '+998711000002',
@@ -94,8 +99,8 @@ const stadiumTemplates = [
   {
     ownerEmail: 'owner2@stadium.local',
     name: 'Olympic Mini Pitch',
-    description: 'Mini futbol va trening uchun mo\'ljallangan',
-    address: 'Samarkand, Registon kochasi 7',
+    description: 'Mini futbol, jamoa mashg‘ulotlari va kengashlar uchun qulay baza.',
+    address: 'Samarqand shahri, Registon ko‘chasi 7',
     latitude: 39.6542,
     longitude: 66.9597,
     phone: '+998711000003',
@@ -104,24 +109,24 @@ const stadiumTemplates = [
 
 const fieldTemplates = [
   {
-    name: 'Main Field',
+    name: 'Main Pitch',
     fieldType: FieldType.OUTDOOR,
-    capacity: 8,
+    capacity: 10,
     size: '50x30m',
-    pricePerHour: '150000',
+    pricePerHour: '180000',
     weekendMultiplier: 1.3,
     peakMultiplier: 1.5,
-    description: 'Asosiy futbol maydoni',
+    description: 'Asosiy futbol maydoni, jamoa o‘yinlari uchun ideal.',
   },
   {
-    name: 'Training Field',
+    name: 'Training Pitch',
     fieldType: FieldType.NATURAL_GRASS,
     capacity: 6,
     size: '35x22m',
-    pricePerHour: '110000',
+    pricePerHour: '120000',
     weekendMultiplier: 1.2,
     peakMultiplier: 1.3,
-    description: "Mashg'ulotlar uchun kichik maydon",
+    description: 'Trening va kichik o‘yinlar uchun mo‘ljallangan maydon.',
   },
 ] as const;
 
@@ -135,10 +140,6 @@ const dayPatterns = [
   { dayOfWeek: 6, openTime: '09:00', closeTime: '23:00' },
 ] as const;
 
-/**
- * Load .env for direct `npm run seed` execution too.
- * Existing shell variables take precedence over values in .env.
- */
 function loadDotEnv(): void {
   const fs = require('fs') as typeof import('fs');
   const path = require('path') as typeof import('path');
@@ -182,29 +183,35 @@ function assertSafeDatabaseTarget(): void {
     throw new Error('DATABASE_URL noto‘g‘ri formatda.');
   }
 
-  const localHosts = new Set([
-    'localhost',
-    '127.0.0.1',
-    '::1',
-    'postgres',
-    'host.docker.internal',
-  ]);
+  const localHosts = new Set(['localhost', '127.0.0.1', '::1', 'postgres', 'host.docker.internal']);
 
   if (!localHosts.has(hostname) && process.env.ALLOW_NON_LOCAL_DB !== 'true') {
     throw new Error(
       `Seed xavfsizlik sabab to‘xtatildi: DATABASE_URL host "${hostname}" local emas. ` +
-      'Faqat aniq tasdiqlangan development/test database uchun ALLOW_NON_LOCAL_DB=true ni ongli ravishda sozlang.',
+        'Faqat aniq tasdiqlangan development/test database uchun ALLOW_NON_LOCAL_DB=true ni ongli ravishda sozlang.',
     );
   }
 }
 
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function buildDemoDate(offsetDays: number, hour: number, minute = 0): Date {
+  const date = addDays(new Date(), offsetDays);
+  date.setHours(hour, minute, 0, 0);
+  return date;
+}
+
 async function seedUsers(): Promise<void> {
-  for (const user of sampleUsers) {
-    // Hash only when the demo account must be created. Existing accounts are not changed.
+  for (const user of demoUsers) {
     const existing = await prisma.user.findUnique({
       where: { email: user.email },
       select: { id: true },
     });
+
     if (existing) continue;
 
     const passwordHash = await bcrypt.hash(user.password, 12);
@@ -231,13 +238,9 @@ async function seedStadiumsAndFields(): Promise<void> {
     });
 
     if (!owner) {
-      throw new Error(
-        `Owner topilmadi: ${stadiumTemplate.ownerEmail}. Avval seedUsers bajarilishi kerak.`,
-      );
+      throw new Error(`Owner topilmadi: ${stadiumTemplate.ownerEmail}. Avval seedUsers bajarilishi kerak.`);
     }
 
-    // Stadium has no schema-level unique key for (ownerId, name), so use a
-    // sequential find-then-create rather than inventing a fake UUID for upsert.
     let stadium = await prisma.stadium.findFirst({
       where: {
         ownerId: owner.id,
@@ -299,7 +302,6 @@ async function seedStadiumsAndFields(): Promise<void> {
               dayOfWeek: schedule.dayOfWeek,
             },
           },
-          // Do not overwrite schedules that a developer has already customized.
           update: {},
           create: {
             fieldId: field.id,
@@ -314,6 +316,146 @@ async function seedStadiumsAndFields(): Promise<void> {
   }
 }
 
+async function seedBookingsAndPayments(): Promise<void> {
+  const possibleBookings = [
+    {
+      userEmail: 'user1@stadium.local',
+      stadiumName: 'Tashkent Arena',
+      fieldName: 'Main Pitch',
+      startOffsetDays: 2,
+      startHour: 18,
+      durationHours: 1,
+      status: BookingStatus.CONFIRMED,
+      paymentStatus: PaymentStatus.SUCCESS,
+      paymentProvider: PaymentProviderType.MOCK,
+      notificationType: NotificationType.BOOKING_CONFIRMED,
+    },
+    {
+      userEmail: 'user2@stadium.local',
+      stadiumName: 'Green Valley Stadium',
+      fieldName: 'Training Pitch',
+      startOffsetDays: 4,
+      startHour: 16,
+      durationHours: 2,
+      status: BookingStatus.PAYMENT_PENDING,
+      paymentStatus: PaymentStatus.PENDING,
+      paymentProvider: PaymentProviderType.MOCK,
+      notificationType: NotificationType.BOOKING_CREATED,
+    },
+    {
+      userEmail: 'user3@stadium.local',
+      stadiumName: 'Olympic Mini Pitch',
+      fieldName: 'Main Pitch',
+      startOffsetDays: 7,
+      startHour: 11,
+      durationHours: 1,
+      status: BookingStatus.CANCELLED,
+      paymentStatus: PaymentStatus.REFUNDED,
+      paymentProvider: PaymentProviderType.MOCK,
+      notificationType: NotificationType.BOOKING_CANCELLED,
+    },
+  ];
+
+  for (const bookingTemplate of possibleBookings) {
+    const user = await prisma.user.findUnique({ where: { email: bookingTemplate.userEmail } });
+    if (!user) continue;
+
+    const stadium = await prisma.stadium.findFirst({
+      where: { name: bookingTemplate.stadiumName, deletedAt: null },
+      select: { id: true },
+    });
+
+    if (!stadium) continue;
+
+    const field = await prisma.field.findFirst({
+      where: {
+        stadiumId: stadium.id,
+        name: bookingTemplate.fieldName,
+        deletedAt: null,
+      },
+      include: { stadium: true },
+    });
+
+    if (!field) continue;
+
+    const startTime = buildDemoDate(bookingTemplate.startOffsetDays, bookingTemplate.startHour);
+    const endTime = new Date(startTime.getTime() + bookingTemplate.durationHours * 60 * 60 * 1000);
+    const price = new Prisma.Decimal(field.pricePerHour.toString()).mul(bookingTemplate.durationHours);
+
+    const existingBooking = await prisma.booking.findFirst({
+      where: {
+        userId: user.id,
+        fieldId: field.id,
+        startTime,
+        endTime,
+      },
+    });
+
+    if (existingBooking) {
+      continue;
+    }
+
+    const booking = await prisma.booking.create({
+      data: {
+        userId: user.id,
+        fieldId: field.id,
+        startTime,
+        endTime,
+        duration: bookingTemplate.durationHours * 60,
+        price,
+        status: bookingTemplate.status,
+        cancellationReason:
+          bookingTemplate.status === BookingStatus.CANCELLED ? 'Demo cancellation for testing' : null,
+      },
+    });
+
+    const paymentIdempotencyKey = `demo-${booking.id}`;
+    await prisma.payment.upsert({
+      where: { bookingId: booking.id },
+      update: {
+        amount: price,
+        currency: 'UZS',
+        provider: bookingTemplate.paymentProvider,
+        status: bookingTemplate.paymentStatus,
+        transactionId: `txn-demo-${booking.id}`,
+      },
+      create: {
+        bookingId: booking.id,
+        amount: price,
+        currency: 'UZS',
+        provider: bookingTemplate.paymentProvider,
+        status: bookingTemplate.paymentStatus,
+        idempotencyKey: paymentIdempotencyKey,
+        transactionId: `txn-demo-${booking.id}`,
+      },
+    });
+
+    if (bookingTemplate.notificationType) {
+      await prisma.notification.upsert({
+        where: {
+          id: `demo-notification-${booking.id}`,
+        },
+        update: {},
+        create: {
+          id: `demo-notification-${booking.id}`,
+          userId: user.id,
+          type: bookingTemplate.notificationType,
+          title: bookingTemplate.status === BookingStatus.CANCELLED ? 'Booking cancelled' : 'Booking confirmed',
+          body:
+            bookingTemplate.status === BookingStatus.CANCELLED
+              ? 'Demo booking is cancelled and refunded.'
+              : 'Your demo booking is confirmed and ready to use.',
+          metadata: {
+            bookingId: booking.id,
+            fieldId: field.id,
+            stadiumId: stadium.id,
+          },
+        },
+      });
+    }
+  }
+}
+
 async function main(): Promise<void> {
   loadDotEnv();
   assertSafeDatabaseTarget();
@@ -321,20 +463,23 @@ async function main(): Promise<void> {
 
   await seedUsers();
   await seedStadiumsAndFields();
+  await seedBookingsAndPayments();
 
-  const [userCount, stadiumCount, fieldCount, workingHourCount] =
+  const [userCount, stadiumCount, fieldCount, workingHourCount, bookingCount, paymentCount] =
     await Promise.all([
       prisma.user.count(),
       prisma.stadium.count(),
       prisma.field.count(),
       prisma.workingHour.count(),
+      prisma.booking.count(),
+      prisma.payment.count(),
     ]);
 
   console.log(
-    `Seed yakunlandi. Database jami: Users=${userCount}, Stadiums=${stadiumCount}, Fields=${fieldCount}, WorkingHours=${workingHourCount}`,
+    `Seed yakunlandi. Database jami: Users=${userCount}, Stadiums=${stadiumCount}, Fields=${fieldCount}, WorkingHours=${workingHourCount}, Bookings=${bookingCount}, Payments=${paymentCount}`,
   );
   console.log(
-    'Demo hisoblar faqat lokal development/test uchun. Login ma’lumotlari README.md dagi "Seed ma’lumotlari" bo‘limida.',
+    'Demo hisoblar faqat lokal development/test muhitda ishlatiladi. Login ma’lumotlari docs/demo-credentials.md faylida ko‘rsatilgan.',
   );
 }
 
