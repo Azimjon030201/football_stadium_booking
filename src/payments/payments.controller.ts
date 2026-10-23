@@ -19,6 +19,8 @@ import { IsUUID } from 'class-validator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PaymentsService } from './payments.service';
+import { WebhookSignatureGuard } from './webhook-signature.guard';
+import { WebhookDto } from './dto/webhook.dto';
 
 class InitiatePaymentRequestDto {
   @ApiProperty({
@@ -74,5 +76,16 @@ export class PaymentsController {
       user.userId,
       user.role,
     );
+  }
+
+  @Post('webhook/:provider')
+  @UseGuards(WebhookSignatureGuard)
+  @ApiOperation({ summary: 'Mock payment webhook handler' })
+  @ApiResponse({ status: 200, description: 'Webhook qabul qilindi' })
+  handleWebhook(
+    @Param('provider') provider: string,
+    @Body() dto: WebhookDto,
+  ) {
+    return this.paymentsService.handleWebhook(provider, dto);
   }
 }

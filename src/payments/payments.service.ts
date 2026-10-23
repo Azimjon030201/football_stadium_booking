@@ -8,6 +8,7 @@ import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentErrors } from './payments.errors';
 import { MockProvider } from './providers/mock-provider';
+import { WebhookDto } from './dto/webhook.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -158,5 +159,72 @@ export class PaymentsService {
       createdAt: payment.createdAt,
       updatedAt: payment.updatedAt,
     };
+  }
+
+  async handleWebhook(provider: string, dto: WebhookDto) {
+    const normalizedProvider = provider.toUpperCase();
+
+    if (normalizedProvider !== 'MOCK') {
+      throw new BadRequestException({
+        error: PaymentErrors.UNKNOWN_PROVIDER,
+        message: 'Unsupported provider',
+      });
+    }
+
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        OR: [{ bookingId: dto.bookingId }, { idempotencyKey: dto.idempotencyKey }],
+      },
+      include: { booking: { select: { userId: true } } },
+    });
+
+    if (!payment) {
+      throw new NotFoundException({
+        error: PaymentErrors.PAYMENT_NOT_FOUND,
+        message: 'Webhook uchun to‘lov topilmadi',
+      });
+    }
+
+    if (payment.status === 'SUCCESS') {
+      return { received: true };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const current = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
+
+      if (current.status === 'SUCCESS') {
+        return { received: true };
+      }
+
+      await tx.booking.update({
+        where: { id: current.bookingId },
+        data: { status: 'CONFIRMED' },
+      });
+
+      await tx.payment.update({
+        where: { id: current.id },
+        data: {
+          status: dto.status === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
+          transactionId: dto.transactionId,
+        },
+      });
+
+      if (dto.status === 'SUCCESS') {
+        await tx.notification.create({
+          data: {
+            userId: payment.booking.userId,
+            type: 'BOOKING_CONFIRMED',
+            title: 'Booking confirmed',
+            body: 'Your booking has been confirmed and paid successfully.',
+            metadata: {
+              bookingId: payment.bookingId,
+              paymentId: payment.id,
+            },
+          },
+        });
+      }
+    });
+
+    return { received: true };
   }
 }
