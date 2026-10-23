@@ -304,6 +304,27 @@ Environment sozlamalari:
 
 Login qilishdan so'ng, Postman auth tokenini ishlatib protected endpointlarga murojaat qilishingiz mumkin.
 
+## J1. Concurrent booking testi va CI
+
+Booking conflict / double-booking himoyasini tekshirish uchun alohida skript mavjud:
+
+```bash
+npm run test:booking-conflict
+```
+
+Ushbu skript `test/booking-conflict.e2e-spec.ts` faylini `jest-e2e` konfiguratsiyasi bilan ishga tushiradi. Test ikkita parallel booking so'rovini yuboradi va quyidagilarni tekshiradi:
+
+- faqat bittasi muvaffaqiyatli bo'lishi kerak;
+- ikkinchisi `409 Conflict` va `BOOKING_CONFLICT` qaytarishi kerak;
+- database'da shu field va vaqt oralig'i uchun faqat bitta booking mavjud bo'lishi kerak.
+
+Agar booking engine o'zgartirilsa yoki Prisma schema/migration o'zgargan bo'lsa, quyidagi holatlarda ushbu testni qayta ishlatish kerak:
+
+- booking service/controller o'zgartirilganda;
+- Prisma schema yoki migrationlar o'zgartirilganda;
+- pull requestdan oldin;
+- booking conflict bug'ini tuzatsangiz.
+
 ## J. Muammolarni hal qilish
 
 | Muammo | Sabab | Yechim |

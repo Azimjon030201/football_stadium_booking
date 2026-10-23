@@ -37,7 +37,6 @@ export class RolesGuard implements CanActivate {
 
     throw new ForbiddenException({
       error: ErrorCodes.FORBIDDEN_RESOURCE,
-      message: 'Bu amalni bajarishga ruxsatingiz yo‘q',
     });
   }
 }

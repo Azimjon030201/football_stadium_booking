@@ -8,12 +8,20 @@ import { UserRole } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MockProvider } from './providers/mock-provider';
+<<<<<<< HEAD
+import { PaymentErrors } from './payments.errors';
+=======
+>>>>>>> 13ef22a5adbdd6b85794175161789f98cb8f65cd
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
+<<<<<<< HEAD
+    private readonly provider: MockProvider = new MockProvider(),
+=======
     private readonly provider: MockProvider,
+>>>>>>> 13ef22a5adbdd6b85794175161789f98cb8f65cd
   ) {}
 
   async initiatePayment(bookingId: string, userId: string) {
@@ -22,6 +30,72 @@ export class PaymentsService {
     });
 
     if (!booking) {
+<<<<<<< HEAD
+      throw new NotFoundException({ error: PaymentErrors.BOOKING_NOT_FOUND });
+    }
+
+    if (booking.userId !== userId) {
+      throw new ForbiddenException({ error: PaymentErrors.FORBIDDEN_RESOURCE });
+    }
+
+    if (booking.status !== 'PENDING') {
+      throw new BadRequestException({ error: PaymentErrors.BOOKING_INVALID_STATE });
+    }
+
+    return this.prisma.$transaction(async (tx: any) => {
+      const updateResult = await tx.booking.updateMany({
+        where: { id: bookingId, userId, status: 'PENDING' },
+        data: { status: 'PAYMENT_PENDING' },
+      });
+
+      if (updateResult.count !== 1) {
+        throw new BadRequestException({ error: PaymentErrors.BOOKING_INVALID_STATE });
+      }
+
+      const amount = typeof booking.price === 'string' ? booking.price : booking.price.toString();
+
+      const payment = await tx.payment.upsert({
+        where: { bookingId },
+        create: {
+          bookingId,
+          amount,
+          currency: 'UZS',
+          provider: 'MOCK',
+          status: 'INITIATED',
+          idempotencyKey: `pay-${bookingId}-${Date.now()}`,
+        },
+        update: {
+          amount,
+          currency: 'UZS',
+          provider: 'MOCK',
+          status: 'INITIATED',
+        },
+      });
+
+      const providerResult = await this.provider.initiate({
+        paymentId: payment.id,
+        bookingId,
+        amount,
+        currency: 'UZS',
+        idempotencyKey: payment.idempotencyKey,
+      });
+
+      const paymentUpdateClient = tx?.payment?.update ? tx.payment : this.prisma.payment;
+      await paymentUpdateClient.update({
+        where: { id: payment.id },
+        data: {
+          transactionId: providerResult.transactionId,
+          status: 'PENDING',
+          provider: 'MOCK',
+        },
+      });
+
+      return {
+        status: 'PENDING',
+        transactionId: providerResult.transactionId,
+      };
+    });
+=======
       throw new NotFoundException({
         error: 'BOOKING_NOT_FOUND',
         message: 'Bron topilmadi',
@@ -105,6 +179,7 @@ export class PaymentsService {
         ? { redirectUrl: result.redirectUrl }
         : {}),
     };
+>>>>>>> 13ef22a5adbdd6b85794175161789f98cb8f65cd
   }
 
   async findOne(id: string, userId: string, role: UserRole) {
