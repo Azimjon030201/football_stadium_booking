@@ -1,75 +1,80 @@
 import {
-  Body,
   Controller,
-  Delete,
   Get,
-  Param,
-  Patch,
   Post,
+  Patch,
   Put,
-  Req,
+  Delete,
+  Body,
+  Param,
   UseGuards,
+  Req,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { FieldsService } from './fields.service';
 import { CreateFieldDto } from './dto/create-field.dto';
 import { UpdateFieldDto } from './dto/update-field.dto';
-import { WorkingHourDto } from './dto/working-hour.dto';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { SetWorkingHoursDto } from './dto/working-hour.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-// Batafsil: Dev4 qo'llanma (6-BOB), TASK-01 dan TASK-11 gacha
-@ApiTags('Fields')
+@ApiTags('Fields & Search (Dev4)')
 @Controller()
 export class FieldsController {
-  constructor(private fieldsService: FieldsService) {}
+  constructor(private readonly fieldsService: FieldsService) {}
 
-  @ApiOperation({ summary: 'Field yaratish' })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @Post('stadiums/:stadiumId/fields')
-  create(@Param('stadiumId') stadiumId: string, @Req() req, @Body() dto: CreateFieldDto) {
-    return this.fieldsService.create(stadiumId, req.user.userId, req.user.role, dto);
-  }
-
-  @ApiOperation({ summary: "Stadiondagi field'lar ro'yxati" })
   @Get('stadiums/:stadiumId/fields')
-  findByStadium(@Param('stadiumId') stadiumId: string) {
+  @ApiOperation({ summary: 'Stadiondagi barcha maydonlarni olish (Public)' })
+  async getStadiumFields(@Param('stadiumId') stadiumId: string) {
     return this.fieldsService.findByStadium(stadiumId);
   }
 
-  @ApiOperation({ summary: 'Field detali' })
+  @Post('stadiums/:stadiumId/fields')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Stadion ichiga yangi maydon qo\'shish (Owner/Admin)' })
+  async createField(
+    @Param('stadiumId') stadiumId: string,
+    @Req() req: any,
+    @Body() dto: CreateFieldDto,
+  ) {
+    return this.fieldsService.createField(stadiumId, req.user.id, req.user.role, dto);
+  }
+
   @Get('fields/:id')
-  findOne(@Param('id') id: string) {
+  @ApiOperation({ summary: 'Bitta maydon haqida to\'liq ma\'lumot (Public)' })
+  async getField(@Param('id') id: string) {
     return this.fieldsService.findOne(id);
   }
 
-  @ApiOperation({ summary: "Field'ni tahrirlash / isActive o'zgartirish" })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Patch('fields/:id')
-  update(@Param('id') id: string, @Req() req, @Body() dto: UpdateFieldDto) {
-    return this.fieldsService.update(id, req.user.userId, req.user.role, dto);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Maydon ma\'lumotlarini tahrirlash (Owner/Admin)' })
+  async updateField(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() dto: UpdateFieldDto,
+  ) {
+    return this.fieldsService.updateField(id, req.user.id, req.user.role, dto);
   }
 
-  @ApiOperation({ summary: 'Ish vaqtlarini o\'rnatish (7 kunlik massiv)' })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Put('fields/:id/working-hours')
-  setWorkingHours(@Param('id') id: string, @Req() req, @Body() hours: WorkingHourDto[]) {
-    return this.fieldsService.setWorkingHours(id, req.user.userId, req.user.role, hours);
-  }
-
-  @ApiOperation({ summary: 'Ish vaqtlarini ko\'rish' })
-  @Get('fields/:id/working-hours')
-  getWorkingHours(@Param('id') id: string) {
-    return this.fieldsService.getWorkingHours(id);
-  }
-
-  @ApiOperation({ summary: "Field'ni o'chirish (soft delete)" })
-  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Maydonning ish vaqtlarini o\'rnatish (Owner/Admin)' })
+  async setWorkingHours(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() dto: SetWorkingHoursDto,
+  ) {
+    return this.fieldsService.setWorkingHours(id, req.user.id, req.user.role, dto.hours);
+  }
+
   @Delete('fields/:id')
-  remove(@Param('id') id: string, @Req() req) {
-    return this.fieldsService.remove(id, req.user.userId, req.user.role);
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Maydonni soft-delete qilish (Owner/Admin)' })
+  async removeField(@Param('id') id: string, @Req() req: any) {
+    return this.fieldsService.removeField(id, req.user.id, req.user.role);
   }
 }

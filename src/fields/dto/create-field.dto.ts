@@ -1,20 +1,33 @@
-import { IsEnum, IsInt, IsOptional, IsPositive, Length } from 'class-validator';
+import { IsString, IsEnum, IsInt, IsPositive, IsOptional } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
-// Batafsil: Dev4 qo'llanma, 6-BOB, TASK-01, TASK-06
+export enum FieldType {
+  INDOOR = 'INDOOR',
+  OUTDOOR = 'OUTDOOR',
+  NATURAL_GRASS = 'NATURAL_GRASS',
+  ARTIFICIAL_GRASS = 'ARTIFICIAL_GRASS',
+}
+
 export class CreateFieldDto {
-  @Length(1, 100)
+  @ApiProperty({ example: 'Maydon 1 (Yopiq)' })
+  @IsString()
   name: string;
 
-  @IsEnum(['INDOOR', 'OUTDOOR', 'NATURAL_GRASS', 'ARTIFICIAL_GRASS'])
-  fieldType: string;
+  @ApiProperty({ enum: FieldType, example: FieldType.INDOOR })
+  @IsEnum(FieldType)
+  fieldType: FieldType;
 
+  @ApiProperty({ example: 12 })
   @IsInt()
   @IsPositive()
   capacity: number;
 
+  @ApiProperty({ example: '40x20m', required: false })
   @IsOptional()
+  @IsString()
   size?: string;
 
+  @ApiProperty({ example: 150000 })
   @IsPositive()
   pricePerHour: number;
 }

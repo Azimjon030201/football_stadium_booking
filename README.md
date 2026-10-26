@@ -49,7 +49,7 @@ src/
 │
 ├── fields/                → Dev4 (Field, Working Hours & Search)
 │   ├── dto/                create-field, update-field, working-hour
-│   └── fields.service.ts   ← TASK-01...TASK-11 shu yerda (TODO)
+│   └── fields.service.ts   ← Field CRUD, Working Hours, qidiruv/pagination implement qilingan
 │
 ├── payments/               → Dev5 (Mock Payment & Webhook)
 │   ├── dto/                initiate-payment, webhook
@@ -79,6 +79,18 @@ test/
 ├── jest-e2e.json
 └── booking-conflict.e2e-spec.ts   → Dev6 + Tech Lead, TASK-08 (TODO)
 ```
+
+## Field, Working Hours va qidiruv (Dev4)
+
+- `POST /stadiums/:stadiumId/fields` — stadion egasi yoki Admin field yaratadi.
+- `GET /stadiums/:stadiumId/fields`, `GET /fields/:id` — public field ro'yxati va detali.
+- `PATCH /fields/:id`, `DELETE /fields/:id` — egasi/Admin tahrirlaydi; o'chirish soft-delete.
+- `PUT /fields/:id/working-hours` — `hours` massivida kunlarni upsert qiladi. Qisman hafta yuborish
+  mumkin; takrorlangan kunlar rad etiladi. Ochiq kun uchun ikkala vaqt (`HH:mm`) talab qilinadi,
+  yopiq kunning vaqt qiymatlari `null` qilib saqlanadi. Upsert'lar tranzaksiyada bajariladi.
+- `GET /stadiums` — `search`, `minPrice`, `maxPrice`, `fieldType`, `capacity`, `minRating`,
+  `page` va `limit` bo'yicha qidiradi. Javob `{ data, meta }` shaklida; `limit` ko'pi bilan 100.
+  Narx filtri stadionning eng arzon, soft-delete qilinmagan field narxiga qo'llanadi.
 
 ## Qanday ishlash kerak (har bir dasturchi uchun)
 
