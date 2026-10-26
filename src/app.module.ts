@@ -23,7 +23,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     AvailabilityModule,
     BookingsModule,
     PaymentsModule,
-    ScheduleModule.forRoot()
+    ScheduleModule.forRoot(),
   ],
 })
 export class AppModule {}

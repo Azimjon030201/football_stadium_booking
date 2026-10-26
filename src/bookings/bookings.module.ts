@@ -6,7 +6,7 @@ import { BookingExpiryService } from './booking-expiry.service';
 
 @Module({
   controllers: [BookingsController],
-  providers: [BookingsService, JwtAuthGuard, BookingsService, BookingExpiryService],
+  providers: [BookingsService, JwtAuthGuard, BookingExpiryService],
   exports: [BookingsService],
 })
 export class BookingsModule {}
