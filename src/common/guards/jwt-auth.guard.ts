@@ -15,6 +15,23 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
+  handleRequest<TUser = unknown>(
+    err: unknown,
+    user: unknown,
+    info: unknown,
+    context: ExecutionContext,
+    status?: unknown,
+  ): TUser {
+    if (info instanceof Error && info.name === 'TokenExpiredError') {
+      throw new UnauthorizedException({
+        error: ErrorCodes.AUTH_TOKEN_EXPIRED,
+        message: 'Access token muddati tugagan',
+      });
+    }
+
+    return super.handleRequest<TUser>(err, user, info, context, status);
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const authenticated = await super.canActivate(context);
 
