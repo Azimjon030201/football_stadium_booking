@@ -121,8 +121,8 @@ describe('Booking Conflict (concurrent)', () => {
     const tokenA = loginA.body.accessToken;
     const tokenB = loginB.body.accessToken;
 
-    const startTime = '2038-01-15T18:00:00.000Z';
-    const endTime = '2038-01-15T19:00:00.000Z';
+    const startTime = '2026-10-27T05:00:00.000Z';
+    const endTime = '2026-10-27T06:00:00.000Z';
 
     const [first, second] = await Promise.all([
       http

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -26,12 +27,15 @@ export class AvailabilityService {
       throw new ConflictException({ error: 'FIELD_UNAVAILABLE' });
     }
 
-    const targetDate = new Date(date);
-    if (Number.isNaN(targetDate.getTime())) {
-      throw new ConflictException({ error: 'VALIDATION_ERROR' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T12:00:00+05:00`).getTime())) {
+      throw new BadRequestException({
+        error: 'VALIDATION_ERROR',
+        message: 'date YYYY-MM-DD formatida bo‘lishi kerak',
+      });
     }
 
-    const day = targetDate.getDay();
+    const targetDate = new Date(`${date}T12:00:00+05:00`);
+    const day = targetDate.getUTCDay();
     const baseSchedule = field.workingHours.find((wh) => wh.dayOfWeek === day);
     const specialDay = await this.prisma.specialWorkingDay.findFirst({
       where: {
@@ -63,18 +67,18 @@ export class AvailabilityService {
     const openMinutes = this.toMinutes(openTime);
     const closeMinutes = this.toMinutes(closeTime);
 
-    const [year, month, dayOfMonth] = date.split('-').map(Number);
-    const bookingDate = new Date(Date.UTC(year, month - 1, dayOfMonth));
+    const dayStart = new Date(`${date}T00:00:00+05:00`);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
     const bookings = await this.prisma.booking.findMany({
       where: {
         fieldId,
         status: { in: ['PENDING', 'PAYMENT_PENDING', 'CONFIRMED'] },
         startTime: {
-          lt: new Date(bookingDate.getTime() + 24 * 60 * 60 * 1000),
+          lt: dayEnd,
         },
         endTime: {
-          gt: bookingDate,
+          gt: dayStart,
         },
       },
     });
@@ -83,10 +87,10 @@ export class AvailabilityService {
       where: {
         fieldId,
         startTime: {
-          lt: new Date(bookingDate.getTime() + 24 * 60 * 60 * 1000),
+          lt: dayEnd,
         },
         endTime: {
-          gt: bookingDate,
+          gt: dayStart,
         },
       },
     });
@@ -94,13 +98,11 @@ export class AvailabilityService {
     const slots: Array<{ start: string; end: string; available: boolean }> = [];
 
     const now = new Date();
-    const targetDayStart = new Date(targetDate);
-    targetDayStart.setHours(0, 0, 0, 0);
 
     for (let current = openMinutes; current + 60 <= closeMinutes; current += 60) {
-      const start = new Date(targetDayStart);
-      start.setHours(Math.floor(current / 60), current % 60, 0, 0);
-
+      const hh = String(Math.floor(current / 60)).padStart(2, '0');
+      const mm = String(current % 60).padStart(2, '0');
+      const start = new Date(`${date}T${hh}:${mm}:00+05:00`);
       const end = new Date(start.getTime() + 60 * 60 * 1000);
       const isPast = start.getTime() < now.getTime();
       const overlappingBooking = bookings.some((booking) => {
