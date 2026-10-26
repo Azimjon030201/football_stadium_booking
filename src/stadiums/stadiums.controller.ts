@@ -8,14 +8,22 @@ import {
   Delete,
   UseGuards,
   Req,
+  Query,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { StadiumsService } from './stadiums.service';
 import { CreateStadiumDto } from './dto/create-stadium.dto';
 import { UpdateStadiumDto } from './dto/update-stadium.dto';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'; 
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { QueryStadiumsDto } from './dto/query-stadiums.dto';
 
 @ApiTags('Stadiums')
 @Controller('stadiums')
@@ -31,9 +39,10 @@ export class StadiumsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Получить список стадионов' })
-  findAll(@Req() req: any) {
-    return this.stadiumsService.findAll(req?.user);
+  @ApiOperation({ summary: 'Получить и искать стадионы' })
+  @ApiQuery({ type: QueryStadiumsDto })
+  findAll(@Req() req: any, @Query() query: QueryStadiumsDto) {
+    return this.stadiumsService.findAll(req?.user, query);
   }
 
   @Get(':id')

@@ -7,7 +7,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateStadiumDto } from './dto/create-stadium.dto';
 import { UpdateStadiumDto } from './dto/update-stadium.dto';
-import { StadiumStatus } from '@prisma/client';
+import { Prisma, StadiumStatus } from '@prisma/client';
+import { QueryStadiumsDto } from './dto/query-stadiums.dto';
 
 @Injectable()
 export class StadiumsService {
@@ -23,23 +24,83 @@ export class StadiumsService {
     });
   }
 
-  async findAll(user?: { userId: string; role: string }) {
+  async findAll(
+    user?: { userId: string; role: string },
+    query: QueryStadiumsDto = new QueryStadiumsDto(),
+  ) {
+    let where: Prisma.StadiumWhereInput;
+
     if (user?.role === 'ADMIN') {
-      return this.prisma.stadium.findMany({ where: { deletedAt: null } });
+      where = { deletedAt: null };
+    } else if (user?.userId) {
+      where = {
+        deletedAt: null,
+        OR: [{ status: StadiumStatus.ACTIVE }, { ownerId: user.userId }],
+      };
+    } else {
+      where = { status: StadiumStatus.ACTIVE, deletedAt: null };
     }
 
-    if (user?.userId) {
-      return this.prisma.stadium.findMany({
-        where: {
-          deletedAt: null,
-          OR: [{ status: StadiumStatus.ACTIVE }, { ownerId: user.userId }],
-        },
+    const extraFilters: Prisma.StadiumWhereInput[] = [];
+    const hasFieldFilter =
+      query.fieldType !== undefined ||
+      query.minPrice !== undefined ||
+      query.maxPrice !== undefined;
+
+    if (hasFieldFilter) {
+      const fieldFilter: Prisma.FieldWhereInput = {
+        deletedAt: null,
+        isActive: true,
+      };
+      if (query.fieldType) fieldFilter.fieldType = query.fieldType;
+      if (query.minPrice !== undefined || query.maxPrice !== undefined) {
+        fieldFilter.pricePerHour = {
+          ...(query.minPrice !== undefined ? { gte: query.minPrice } : {}),
+          ...(query.maxPrice !== undefined ? { lte: query.maxPrice } : {}),
+        };
+      }
+      extraFilters.push({ fields: { some: fieldFilter } });
+    }
+
+    if (query.search) {
+      extraFilters.push({
+        OR: [
+          { name: { contains: query.search, mode: 'insensitive' } },
+          { address: { contains: query.search, mode: 'insensitive' } },
+        ],
       });
     }
 
-    return this.prisma.stadium.findMany({
-      where: { status: StadiumStatus.ACTIVE, deletedAt: null },
-    });
+    if (extraFilters.length > 0) {
+      where = { AND: [where, ...extraFilters] };
+    }
+
+    const page = Math.max(1, query.page || 1);
+    const take = Math.min(Math.max(1, query.limit || 20), 100);
+    const skip = (page - 1) * take;
+    const [data, total] = await Promise.all([
+      this.prisma.stadium.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          fields: {
+            where: { deletedAt: null },
+          },
+        },
+      }),
+      this.prisma.stadium.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit: take,
+        total,
+        totalPages: Math.ceil(total / take),
+      },
+    };
   }
 
   async findOne(id: string, user?: { userId: string; role: string }) {
