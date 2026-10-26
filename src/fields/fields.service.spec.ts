@@ -1,34 +1,60 @@
 import { BadRequestException } from '@nestjs/common';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkingHourDto } from './dto/working-hour.dto';
 import { SearchStadiumDto } from './dto/search-stadium.dto';
 import { FieldsService } from './fields.service';
 
+const mockAsync = <TArgs extends unknown[], TResult>(value: TResult) =>
+  jest
+    .fn<(...args: TArgs) => Promise<TResult>>()
+    .mockResolvedValue(value);
+
 describe('FieldsService', () => {
+  type AsyncMock<TArgs extends unknown[], TResult> = jest.Mock<
+    (...args: TArgs) => Promise<TResult>
+  >;
+
   let service: FieldsService;
   let prisma: {
-    field: { findUnique: jest.Mock };
-    workingHour: { upsert: jest.Mock };
-    stadium: { findMany: jest.Mock; count: jest.Mock };
-    $transaction: jest.Mock;
+    field: {
+      findUnique: AsyncMock<
+        [Prisma.FieldFindUniqueArgs],
+        { deletedAt: Date | null; stadium: { ownerId: string } } | null
+      >;
+    };
+    workingHour: {
+      upsert: AsyncMock<[Prisma.WorkingHourUpsertArgs], { id: string }>;
+    };
+    stadium: {
+      findMany: AsyncMock<[Prisma.StadiumFindManyArgs], unknown[]>;
+      count: AsyncMock<[Prisma.StadiumCountArgs], number>;
+    };
+    $transaction: AsyncMock<unknown[], unknown[]>;
   };
 
   beforeEach(() => {
     prisma = {
       field: {
-        findUnique: jest.fn().mockResolvedValue({
+        findUnique: mockAsync<
+          [Prisma.FieldFindUniqueArgs],
+          { deletedAt: Date | null; stadium: { ownerId: string } } | null
+        >({
           deletedAt: null,
           stadium: { ownerId: 'owner-1' },
         }),
       },
       workingHour: {
-        upsert: jest.fn().mockResolvedValue({ id: 'working-hour-1' }),
+        upsert: mockAsync<[Prisma.WorkingHourUpsertArgs], { id: string }>({
+          id: 'working-hour-1',
+        }),
       },
       stadium: {
-        findMany: jest.fn().mockResolvedValue([]),
-        count: jest.fn().mockResolvedValue(0),
+        findMany: mockAsync<[Prisma.StadiumFindManyArgs], unknown[]>([]),
+        count: mockAsync<[Prisma.StadiumCountArgs], number>(0),
       },
-      $transaction: jest.fn().mockResolvedValue([]),
+      $transaction: mockAsync<unknown[], unknown[]>([]),
     };
     service = new FieldsService(prisma as unknown as PrismaService);
   });
