@@ -12,11 +12,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-<<<<<<< HEAD
-=======
-import { ChangePasswordDto } from './dto/change-password.dto';
 import { ErrorCodes } from '../common/constants/error-codes';
->>>>>>> b39d743 (test(auth): standardize and verify error responses)
 
 @Injectable()
 export class AuthService {
@@ -82,7 +78,6 @@ export class AuthService {
       });
     }
 
-    // Token yaratishdan oldin hisob holatini tekshiramiz.
     this.checkAccountStatus(user);
 
     const accessToken = this.createAccessToken(
@@ -151,7 +146,6 @@ export class AuthService {
       });
     }
 
-    // Bloklangan hisob refresh orqali ham token ololmaydi.
     this.checkAccountStatus(user);
 
     const accessToken = this.createAccessToken(
