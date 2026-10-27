@@ -9,6 +9,7 @@ import { FieldsModule } from './fields/fields.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PaymentsModule } from './payments/payments.module';
     AvailabilityModule,
     BookingsModule,
     PaymentsModule,
+    ScheduleModule.forRoot(),
   ],
 })
 export class AppModule {}

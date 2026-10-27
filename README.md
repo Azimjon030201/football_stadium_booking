@@ -197,12 +197,14 @@ npx prisma migrate dev
 
 ### Seed ma'lumotlari
 
-Proyektida `prisma/seed.ts` fayli mavjud va local development/test bazasi uchun boshlang'ich ma'lumotlarni yaratadi. Seed maqsadi:
+Proyektida `prisma/seed.ts` fayli mavjud bo'lib, local development/test bazasida demo uchun professional boshlang'ich ma'lumotlarni yaratadi. Seed maqsadi:
 
-- admin, owner va oddiy userlar yaratish
-- aktiv stadiumlar va maydonlar yaratish
-- har bir field uchun full working hours sozlash
-- bir xil ma'lumotlarni takroran kiritmaslik
+- admin, owner va oddiy user hisoblarini yaratish
+- real ko‘rinadigan stadion nomlari va manzillarini kiritish
+- har bir stadion uchun 2 ta maydon yaratish
+- maydonlar uchun ish vaqtlari, narx va statuslarni to‘g‘ri belgilash
+- booking va payment ma'lumotlarining schema bo‘yicha to‘g‘ri bog‘lanishini ta'minlash
+- takroriy ishga tushirishda dublikat hosil bo‘lmasligini kafolatlash
 
 Seed ni quyidagicha ishga tushiring:
 
@@ -211,19 +213,21 @@ npx prisma generate
 npx prisma db seed
 ```
 
-`package.json` Prisma 6 uchun `prisma.seed` sozlamasida `ts-node prisma/seed.ts` runneridan foydalanadi. Seed `.env` faylini ham o‘qiydi; shell orqali oldindan berilgan environment qiymatlari ustun turadi. Docker Compose ishlatilganda backend konteyneridagi `postgres` hostname ishlatiladi.
-
-Agar `.env` file mavjud bo'lmasa, avval namuna fayldan nusxa oling:
+Yoki skript orqali:
 
 ```bash
-Copy-Item .env.example .env
-# yoki
-cp .env.example .env
+npm run seed
 ```
 
-Seed faqat local development / test bazasida ishlatilishi lozim. Production database'ga test ma'lumotlarini kiritmang. Seed script `NODE_ENV=production` bo'lganda xatolik chiqaradi.
+`prisma/schema.prisma` va `package.json` ichidagi haqiqiy scriptlarni qo‘llash orqali seed local yoki demo DB da xavfsiz va takroran ishlaydi. Seed `.env` faylini ham o‘qiydi; shell orqali berilgan environment qiymatlari ustun turadi. Docker Compose ishlatilganda backend konteyneridagi `postgres` hostname ishlatiladi.
 
-Seed tomonidan yaratiladigan demo hisoblar (faqat lokal test uchun):
+### Demo hisoblar
+
+Demo login ma'lumotlari alohida hujjatda berilgan:
+
+- `docs/demo-credentials.md`
+
+Asosiy demo hisoblar:
 
 | Rol | Email | Parol |
 |---|---|---|
@@ -234,9 +238,30 @@ Seed tomonidan yaratiladigan demo hisoblar (faqat lokal test uchun):
 | User | `user2@stadium.local` | `User123!` |
 | User | `user3@stadium.local` | `User123!` |
 
-Seed script idempotent bo‘lishi uchun mavjud demo email, stadium (owner + name), field (stadium + name) yozuvlarini avval tekshiradi va mavjudlarini qayta yaratmaydi. Mavjud foydalanuvchilarning paroli, roli yoki profili hamda mavjud stadion/maydon ma’lumotlari seed tomonidan qayta yozilmaydi. Working Hours uchun schema'dagi `@@unique([fieldId, dayOfWeek])` kalitiga mos `upsert` ishlatiladi; mavjud ish jadvali o‘zgartirilmaydi.
+Seed scripti idempotent bo‘lib, mavjud demo email, stadion nomi, field nomi va booking/payments kombinatsiyalari qayta yaratmaydi. Mavjud foydalanuvchining paroli, roli yoki profil ma'lumotlari qayta yozilmaydi. Working Hours uchun `@@unique([fieldId, dayOfWeek])` kaliti bo‘yicha `upsert` ishlatiladi, shuning uchun mavjud ish jadvali o‘zgartirilmaydi.
 
-Xavfsizlik: seed `NODE_ENV=production` bo‘lsa to‘xtaydi va `DATABASE_URL` hosti `localhost`, `127.0.0.1`, `::1`, `postgres` yoki `host.docker.internal` bo‘lmasa ham, standart holatda to‘xtaydi. `ALLOW_NON_LOCAL_DB=true` himoyani chetlab o‘tishi mumkin; uni faqat database aynan development/test uchun ekanini mustaqil tekshirganingizdan keyin qo‘ying. Hech qachon production bazada seed ishlatmang.
+Xavfsizlik: seed `NODE_ENV=production` bo‘lganda to‘xtaydi va `DATABASE_URL` hosti `localhost`, `127.0.0.1`, `::1`, `postgres` yoki `host.docker.internal` bo‘lmasa ham standart holatda bloklanadi. `ALLOW_NON_LOCAL_DB=true` faqat aniq development/test bazasi uchun qo‘llaniladi. Hech qachon production bazada seed ishlatmang.
+
+### Postman collection va demo ma'lumotlar
+
+Frontend dasturchilar uchun tayyorlangan Postman collection fayli:
+
+- `postman/Football-Stadium-Booking.postman_collection.json`
+
+Seed ma'lumotlari va login namunalari uchun qo‘shimcha hujjat:
+
+- `postman/SEED_DATA.md`
+- `docs/demo-credentials.md`
+
+Import qilish uchun Postman'da Import -> File tanlang, so'ngra yuqoridagi JSON faylini tanlang. Base URL sifatida `http://localhost:3000` ishlating.
+
+Agar `.env` fayl mavjud bo'lmasa, avval namuna fayldan nusxa oling:
+
+```bash
+Copy-Item .env.example .env
+# yoki
+cp .env.example .env
+```
 
 ## G. Backendni ishga tushirish
 
@@ -303,6 +328,27 @@ Environment sozlamalari:
 - `userId`, `stadiumId`, `fieldId`, `bookingId`, `paymentId` = kerak bo'lganda to'ldiriladi
 
 Login qilishdan so'ng, Postman auth tokenini ishlatib protected endpointlarga murojaat qilishingiz mumkin.
+
+## J1. Concurrent booking testi va CI
+
+Booking conflict / double-booking himoyasini tekshirish uchun alohida skript mavjud:
+
+```bash
+npm run test:booking-conflict
+```
+
+Ushbu skript `test/booking-conflict.e2e-spec.ts` faylini `jest-e2e` konfiguratsiyasi bilan ishga tushiradi. Test ikkita parallel booking so'rovini yuboradi va quyidagilarni tekshiradi:
+
+- faqat bittasi muvaffaqiyatli bo'lishi kerak;
+- ikkinchisi `409 Conflict` va `BOOKING_CONFLICT` qaytarishi kerak;
+- database'da shu field va vaqt oralig'i uchun faqat bitta booking mavjud bo'lishi kerak.
+
+Agar booking engine o'zgartirilsa yoki Prisma schema/migration o'zgargan bo'lsa, quyidagi holatlarda ushbu testni qayta ishlatish kerak:
+
+- booking service/controller o'zgartirilganda;
+- Prisma schema yoki migrationlar o'zgartirilganda;
+- pull requestdan oldin;
+- booking conflict bug'ini tuzatsangiz.
 
 ## J. Muammolarni hal qilish
 
