@@ -11,6 +11,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  ParseEnumPipe,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -24,6 +25,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Request } from 'express';
+import { StadiumStatus } from '@prisma/client';
 import { StadiumsService } from './stadiums.service';
 import { CreateStadiumDto } from './dto/create-stadium.dto';
 import { UpdateStadiumDto } from './dto/update-stadium.dto';
@@ -84,7 +86,10 @@ export class StadiumsController {
   @ApiOkResponse({ description: 'Admin uchun stadionlar ro‘yxati' })
   @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
   @ApiForbiddenResponse({ description: 'Admin ruxsati yo‘q' })
-  getAdminStadiums(@Query('status') status?: string) {
+  getAdminStadiums(
+    @Query('status', new ParseEnumPipe(StadiumStatus, { optional: true }))
+    status?: StadiumStatus,
+  ) {
     return this.stadiumsService.getAdminStadiums(status);
   }
 
