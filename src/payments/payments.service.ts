@@ -185,46 +185,64 @@ export class PaymentsService {
       });
     }
 
-    if (payment.status === 'SUCCESS') {
-      return { received: true };
+   
+    if (payment.status === 'SUCCESS' || payment.status === 'FAILED') {
+      return { received: true };   // takroriy webhook — hech narsa qilmaymiz
     }
-
+    if (Number(dto.amount) !== Number(payment.amount)) {
+      throw new BadRequestException({
+        error: 'PAYMENT_AMOUNT_MISMATCH',
+        message: 'Webhook summasi to\'lov summasiga mos kelmadi',
+      });
+    }
+    
     await this.prisma.$transaction(async (tx) => {
       const current = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
-
-      if (current.status === 'SUCCESS') {
-        return { received: true };
+    
+      // Poyga holati: boshqa webhook allaqachon ishlab bo'lgan
+      if (current.status === 'SUCCESS' || current.status === 'FAILED') {
+        return;
       }
-
-      await tx.booking.update({
-        where: { id: current.bookingId },
-        data: { status: 'CONFIRMED' },
-      });
-
-      await tx.payment.update({
-        where: { id: current.id },
-        data: {
-          status: dto.status === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
-          transactionId: dto.transactionId,
-        },
-      });
-
+    
       if (dto.status === 'SUCCESS') {
+        await tx.payment.update({
+          where: { id: current.id },
+          data: { status: 'SUCCESS', transactionId: dto.transactionId },
+        });
+        await tx.booking.update({
+          where: { id: current.bookingId },
+          data: { status: 'CONFIRMED' },
+        });
         await tx.notification.create({
           data: {
             userId: payment.booking.userId,
             type: 'BOOKING_CONFIRMED',
             title: 'Booking confirmed',
             body: 'Your booking has been confirmed and paid successfully.',
-            metadata: {
-              bookingId: payment.bookingId,
-              paymentId: payment.id,
-            },
+            metadata: { bookingId: payment.bookingId, paymentId: payment.id },
+          },
+        });
+      } else {
+        await tx.payment.update({
+          where: { id: current.id },
+          data: { status: 'FAILED', transactionId: dto.transactionId },
+        });
+        await tx.booking.update({
+          where: { id: current.bookingId },
+          data: { status: 'PENDING' },
+        });
+        await tx.notification.create({
+          data: {
+            userId: payment.booking.userId,
+            type: 'PAYMENT_FAILED',
+            title: 'Payment failed',
+            body: 'Your payment failed. You can try again.',
+            metadata: { bookingId: payment.bookingId, paymentId: payment.id },
           },
         });
       }
     });
-
+    
     return { received: true };
   }
 }
