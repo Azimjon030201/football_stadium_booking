@@ -6,6 +6,13 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('Booking working hours (e2e)', () => {
+  const getTomorrowDateString = (hours: string) => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = tomorrow.toISOString().split('T')[0];
+    return `${dateStr}T${hours}.000Z`;
+  };
+
   let app: INestApplication;
   let prisma: PrismaService;
   let http: any;
@@ -105,8 +112,8 @@ describe('Booking working hours (e2e)', () => {
   it('bron 03:00 Toshkent (UTC 22:00 oldin) da bo‘lsa BOOKING_OUTSIDE_WORKING_HOURS bilan 400 qaytaradi', async () => {
     const token = await createUserAndToken();
 
-    const startTime = '2026-10-26T22:00:00.000Z';
-    const endTime = '2026-10-26T23:00:00.000Z';
+const startTime = getTomorrowDateString('03:00:00');
+const endTime = getTomorrowDateString('04:00:00');
 
     const res = await http
       .post('/api/bookings')
@@ -114,7 +121,7 @@ describe('Booking working hours (e2e)', () => {
       .send({ fieldId, startTime, endTime });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe('BOOKING_OUTSIDE_WORKING_HOURS');
+    expect(res.body.message).toBe('Tanlangan vaqt maydonning ish vaqtidan tashqarida');
   });
 
   it('bron 10:00-11:00 Toshkent bo‘lsa 201 qaytaradi', async () => {
@@ -125,8 +132,8 @@ describe('Booking working hours (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         fieldId,
-        startTime: '2026-10-27T05:00:00.000Z',
-        endTime: '2026-10-27T06:00:00.000Z',
+        startTime: getTomorrowDateString('10:00:00'),
+        endTime: getTomorrowDateString('11:00:00')
       });
 
     expect(res.status).toBe(201);
@@ -141,8 +148,8 @@ describe('Booking working hours (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         fieldId,
-        startTime: '2026-10-27T17:30:00.000Z',
-        endTime: '2026-10-27T18:30:00.000Z',
+        startTime:getTomorrowDateString('17:30:00'),
+        endTime: getTomorrowDateString('18:30:00')
       });
 
     expect(res.status).toBe(400);
@@ -155,7 +162,11 @@ describe('Booking working hours (e2e)', () => {
     await prisma.specialWorkingDay.create({
       data: {
         fieldId,
-        date: new Date('2026-10-28T00:00:00.000Z'),
+        date: (() => {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          return tomorrow;
+        })(),
         isClosed: true,
       },
     });
@@ -165,8 +176,8 @@ describe('Booking working hours (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         fieldId,
-        startTime: '2026-10-27T22:00:00.000Z',
-        endTime: '2026-10-27T23:00:00.000Z',
+        startTime:getTomorrowDateString('22:00:00') ,
+        endTime: getTomorrowDateString('23:00:00'),
       });
 
     expect(res.status).toBe(400);

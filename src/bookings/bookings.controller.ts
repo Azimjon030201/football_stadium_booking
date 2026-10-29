@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/comm
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
@@ -15,6 +16,7 @@ import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { ConflictResponseDto } from '../common/dto/conflict-response.dto';
 
 type AuthenticatedRequest = Request & {
   user: {
@@ -23,7 +25,6 @@ type AuthenticatedRequest = Request & {
   };
 };
 
-// Batafsil: Master Qo'llanma, 4-BOB (Tech Lead shaxsiy vazifalari)
 @ApiTags('Bookings')
 @ApiBearerAuth()
 @Controller('bookings')
@@ -33,6 +34,9 @@ export class BookingsController {
   @ApiOperation({ summary: 'Yangi bron yaratish' })
   @ApiCreatedResponse({ description: 'Bron muvaffaqiyatli yaratildi' })
   @ApiBadRequestResponse({ description: 'Noto‘g‘ri so‘rov ma’lumotlari' })
+  @ApiConflictResponse({ description: "Ushbu vaqt oralig'ida maydon allaqachon band qilingan",
+    type: ConflictResponseDto,
+   })
   @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
   @UseGuards(JwtAuthGuard)
   @Post()
