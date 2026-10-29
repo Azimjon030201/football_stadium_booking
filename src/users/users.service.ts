@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -147,7 +148,11 @@ export class UsersService {
   }
 
   // TASK-11: Block / unblock
-  async setStatus(id: string, status: 'BLOCKED' | 'ACTIVE') {
+  async setStatus(
+    id: string,
+    status: 'BLOCKED' | 'ACTIVE',
+    actorId?: string,
+  ) {
     if (status !== 'BLOCKED' && status !== 'ACTIVE') {
       throw new BadRequestException({
         error: ErrorCodes.VALIDATION_ERROR,
@@ -159,6 +164,13 @@ export class UsersService {
       throw new BadRequestException({
         error: ErrorCodes.VALIDATION_ERROR,
         message: 'Foydalanuvchi ID si kerak',
+      });
+    }
+
+    if (actorId && actorId === id && status === 'BLOCKED') {
+      throw new ForbiddenException({
+        error: ErrorCodes.FORBIDDEN_RESOURCE,
+        message: 'Administrator o‘zini bloklay olmaydi',
       });
     }
 
