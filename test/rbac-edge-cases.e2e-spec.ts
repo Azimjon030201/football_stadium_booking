@@ -285,4 +285,22 @@ describe('RBAC edge cases (e2e)', () => {
       .set('Authorization', `Bearer ${admin.token}`)
       .expect(400);
   });
+
+
+    it('ADMIN -> o‘zini bloklash: 403', async () => {
+
+    const response = await http
+      .patch(`/api/admin/users/${admin.id}/block`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ status: 'BLOCKED' })
+      .expect(403);
+
+    expect(response.body.error).toBe(ErrorCodes.FORBIDDEN_RESOURCE);
+
+    const saved = await prisma.user.findUniqueOrThrow({
+      where: { id: admin.id },
+    });
+
+    expect(saved.status).toBe('ACTIVE');
+  });
 });

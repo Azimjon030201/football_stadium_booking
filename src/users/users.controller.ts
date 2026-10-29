@@ -13,6 +13,7 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiQuery,
+  ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -37,6 +38,8 @@ export class UsersController {
 
   @ApiOperation({ summary: "O'z profilini ko'rish" })
   @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Foydalanuvchi profili' })
+  @ApiResponse({ status: 401, description: 'Token yo‘q yoki yaroqsiz' })
   @Get('users/me')
   getMe(@Req() req: AuthenticatedRequest) {
     return this.usersService.getMe(req.user.userId);
@@ -44,6 +47,9 @@ export class UsersController {
 
   @ApiOperation({ summary: "O'z profilini tahrirlash" })
   @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Profil yangilandi' })
+  @ApiResponse({ status: 400, description: 'Noto‘g‘ri ma’lumotlar' })
+  @ApiResponse({ status: 401, description: 'Token yo‘q yoki yaroqsiz' })
   @Patch('users/me')
   updateMe(
     @Req() req: AuthenticatedRequest,
@@ -67,6 +73,10 @@ export class UsersController {
   })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
+  @ApiResponse({ status: 200, description: 'Foydalanuvchilar ro‘yxati' })
+  @ApiResponse({ status: 400, description: 'Pagination parametrlari noto‘g‘ri' })
+  @ApiResponse({ status: 401, description: 'Token yo‘q yoki yaroqsiz' })
+  @ApiResponse({ status: 403, description: 'Admin ruxsati talab qilinadi' })
   @Get('admin/users')
   findAllForAdmin(
     @Query('page') page?: string,
@@ -83,11 +93,20 @@ export class UsersController {
   })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
+  @ApiResponse({ status: 200, description: 'Foydalanuvchi holati yangilandi' })
+  @ApiResponse({ status: 400, description: 'ID yoki status noto‘g‘ri' })
+  @ApiResponse({ status: 401, description: 'Token yo‘q yoki yaroqsiz' })
+  @ApiResponse({
+    status: 403,
+    description: 'Ruxsat yo‘q yoki admin o‘zini bloklayapti',
+  })
+  @ApiResponse({ status: 404, description: 'Foydalanuvchi topilmadi' })
   @Patch('admin/users/:id/block')
-  setStatus(
+    setStatus(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateUserStatusDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.usersService.setStatus(id, dto.status);
+    return this.usersService.setStatus(id, dto.status, req.user.userId);
   }
 }
