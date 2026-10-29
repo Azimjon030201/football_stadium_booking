@@ -92,7 +92,7 @@ describe('Booking Conflict (concurrent)', () => {
       password,
       firstName: 'Alice',
       lastName: 'Test',
-      phone: '+998901234561',
+      phone: `+99890${Math.floor(1000000 + Math.random() * 9000000)}`,
     });
 
     const userB = await http.post('/api/auth/register').send({
@@ -100,7 +100,7 @@ describe('Booking Conflict (concurrent)', () => {
       password,
       firstName: 'Bob',
       lastName: 'Test',
-      phone: '+998901234562',
+      phone: `+99890${Math.floor(1000000 + Math.random() * 9000000)}`,
     });
 
     expect(userA.status).toBe(201);
@@ -121,8 +121,22 @@ describe('Booking Conflict (concurrent)', () => {
     const tokenA = loginA.body.accessToken;
     const tokenB = loginB.body.accessToken;
 
-    const startTime = '2026-10-27T05:00:00.000Z';
-    const endTime = '2026-10-27T06:00:00.000Z';
+    const tomorrow = new Date();
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+    const startTime = new Date(Date.UTC(
+      tomorrow.getUTCFullYear(),
+      tomorrow.getUTCMonth(),
+      tomorrow.getUTCDate(),
+      6, 0, 0,
+    ));
+
+    const endTime = new Date(Date.UTC(
+      tomorrow.getUTCFullYear(),
+      tomorrow.getUTCMonth(),
+      tomorrow.getUTCDate(),
+      7, 0, 0,
+    ));
 
     const [first, second] = await Promise.all([
       http

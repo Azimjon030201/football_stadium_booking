@@ -47,8 +47,10 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Bron uchun to‘lovni boshlash' })
   @ApiResponse({ status: 201, description: 'To‘lov boshlandi' })
   @ApiResponse({ status: 400, description: 'Bron holati noto‘g‘ri' })
+  @ApiResponse({ status: 401, description: 'JWT token yaroqsiz' })
   @ApiResponse({ status: 403, description: 'Bron sizga tegishli emas' })
   @ApiResponse({ status: 404, description: 'Bron topilmadi' })
+  @ApiResponse({ status: 409, description: 'To‘lov allaqachon mavjud yoki konflikt' })
   initiatePayment(
     @Body() dto: InitiatePaymentRequestDto,
     @CurrentUser() user: AuthUser,
@@ -65,8 +67,10 @@ export class PaymentsController {
   })
   @ApiResponse({ status: 200, description: 'To‘lov ma’lumoti' })
   @ApiResponse({ status: 400, description: 'Noto‘g‘ri UUID' })
+  @ApiResponse({ status: 401, description: 'JWT token yaroqsiz' })
   @ApiResponse({ status: 403, description: 'FORBIDDEN_RESOURCE' })
   @ApiResponse({ status: 404, description: 'PAYMENT_NOT_FOUND' })
+  @ApiResponse({ status: 409, description: 'Holat konflikt' })
   findOne(
     @Param('id', new ParseUUIDPipe()) id: string,
     @CurrentUser() user: AuthUser,
@@ -82,6 +86,10 @@ export class PaymentsController {
   @UseGuards(WebhookSignatureGuard)
   @ApiOperation({ summary: 'Mock payment webhook handler' })
   @ApiResponse({ status: 200, description: 'Webhook qabul qilindi' })
+  @ApiResponse({ status: 401, description: 'Webhook autentifikatsiyasi yaroqsiz' })
+  @ApiResponse({ status: 403, description: 'Webhook signature xato' })
+  @ApiResponse({ status: 404, description: 'Provider topilmadi' })
+  @ApiResponse({ status: 409, description: 'Webhook duplicate/konflikt' })
   handleWebhook(
     @Param('provider') provider: string,
     @Body() dto: WebhookDto,

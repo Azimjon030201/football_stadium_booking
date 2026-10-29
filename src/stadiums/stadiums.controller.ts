@@ -11,6 +11,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  ParseEnumPipe,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -22,8 +23,10 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiConflictResponse
 } from '@nestjs/swagger';
 import { Request } from 'express';
+import { StadiumStatus } from '@prisma/client';
 import { StadiumsService } from './stadiums.service';
 import { CreateStadiumDto } from './dto/create-stadium.dto';
 import { UpdateStadiumDto } from './dto/update-stadium.dto';
@@ -84,7 +87,10 @@ export class StadiumsController {
   @ApiOkResponse({ description: 'Admin uchun stadionlar ro‘yxati' })
   @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
   @ApiForbiddenResponse({ description: 'Admin ruxsati yo‘q' })
-  getAdminStadiums(@Query('status') status?: string) {
+  getAdminStadiums(
+    @Query('status', new ParseEnumPipe(StadiumStatus, { optional: true }))
+    status?: StadiumStatus,
+  ) {
     return this.stadiumsService.getAdminStadiums(status);
   }
 
@@ -130,15 +136,26 @@ export class StadiumsController {
     return this.stadiumsService.approve(id);
   }
 
-  @Delete(':id')
+@Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard, OwnershipGuard)
   @Roles('OWNER', 'ADMIN')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Stadionni arxivlash (Soft delete)' })
   @ApiOkResponse({ description: 'Stadion muvaffaqiyatli arxivlandi' })
-  @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
-  @ApiForbiddenResponse({ description: 'Ushbu stadionni arxivlashga ruxsat yo‘q' })
+  @ApiBadRequestResponse({ description: 'Noto‘g‘ri so‘rov' })
+  @ApiUnauthorizedResponse({ description: 'Avtorizatsiyadan o‘tilmagan' })
+  @ApiForbiddenResponse({ description: 'Ruxsat yo‘q' })
+  @ApiNotFoundResponse({ description: 'Stadion topilmadi' })
+  @ApiConflictResponse({ 
+    description: 'Faol bronlari bor stadionni arxivlash mumkin emas',
+    schema: {
+      example: {
+        error: 'STADIUM_HAS_ACTIVE_BOOKINGS',
+        message: 'Faol bronlari bor stadionni arxivlash mumkin emas'
+      }
+    }
+  })
   remove(
     @Param('id') id: string,
     @Req() req: AuthenticatedRequest,

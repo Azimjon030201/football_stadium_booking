@@ -106,6 +106,21 @@ export class StadiumsService {
 
     this.assertCanManage(stadium.ownerId, user);
 
+    const activeBookings = await this.prisma.booking.findFirst({
+      where:{
+        field: { stadiumId: id },
+        status: { in: ['PENDING', 'PAYMENT_PENDING', 'CONFIRMED'] },
+        startTime: { gte: new Date() },
+      }
+    })
+
+    if (activeBookings) {
+      throw new ConflictException({
+        error: 'STADIUM_HAS_ACTIVE_BOOKINGS',
+        message: 'Faol bronlari bor stadionni arxivlab bolmaydi'
+      })
+    }
+
     return this.prisma.stadium.update({
       where: { id },
       data: {

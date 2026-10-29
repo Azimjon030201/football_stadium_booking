@@ -1,6 +1,6 @@
 
 import { HttpException } from '@nestjs/common';
-import { ErrorCodeType } from './error-codes';
+import type { ErrorCode as ErrorCodeType } from '../constants/error-codes';
 
 export class AppException extends HttpException {
   constructor(

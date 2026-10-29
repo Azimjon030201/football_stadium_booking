@@ -2,8 +2,8 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { createHmac, randomUUID } from 'crypto';
 import { agent } from 'supertest';
-import { AppModule } from 'src/app.module';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * To'liq to'lov oqimi (E2E):
