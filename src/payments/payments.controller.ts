@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
@@ -38,11 +39,11 @@ interface AuthUser {
 
 @ApiTags('payments')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post('initiate')
   @ApiOperation({ summary: 'Bron uchun to‘lovni boshlash' })
   @ApiResponse({ status: 201, description: 'To‘lov boshlandi' })
@@ -61,6 +62,7 @@ export class PaymentsController {
     );
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
   @ApiOperation({
     summary: 'To‘lov holatini tekshirish (egasi / stadion egasi / Admin)',
@@ -83,6 +85,7 @@ export class PaymentsController {
   }
 
   @Post('webhook/:provider')
+  @HttpCode(200)
   @UseGuards(WebhookSignatureGuard)
   @ApiOperation({ summary: 'Mock payment webhook handler' })
   @ApiResponse({ status: 200, description: 'Webhook qabul qilindi' })
