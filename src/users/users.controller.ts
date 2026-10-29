@@ -84,10 +84,11 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   @Patch('admin/users/:id/block')
-  setStatus(
+    setStatus(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateUserStatusDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.usersService.setStatus(id, dto.status);
+    return this.usersService.setStatus(id, dto.status, req.user.userId);
   }
 }
