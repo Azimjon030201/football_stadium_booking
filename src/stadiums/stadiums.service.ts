@@ -115,7 +115,10 @@ export class StadiumsService {
     })
 
     if (activeBookings) {
-      throw new ConflictException('STADIUM_HAS_ACTIVE_BOOKINGS')
+      throw new ConflictException({
+        error: 'STADIUM_HAS_ACTIVE_BOOKINGS',
+        message: 'Faol bronlari bor stadionni arxivlab bolmaydi'
+      })
     }
 
     return this.prisma.stadium.update({

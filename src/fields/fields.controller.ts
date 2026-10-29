@@ -20,6 +20,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiConflictResponse
 } from '@nestjs/swagger';
 import { Request } from 'express';
 import { FieldsService } from './fields.service';
@@ -106,6 +107,7 @@ export class FieldsController {
   @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
   @ApiForbiddenResponse({ description: 'Fieldni o‘chirishga ruxsat yo‘q' })
   @ApiNotFoundResponse({ description: 'Field topilmadi' })
+  @ApiConflictResponse({ description:'Faol bronlar bor fieldni ochirish mumkin emas' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Delete('fields/:id')
