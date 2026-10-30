@@ -1,4 +1,13 @@
-import { Body, Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -54,6 +63,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh token orqali yangi access token oladi' })
   @ApiOkResponse({ description: 'Yangi token muvaffaqiyatli yaratildi' })
   @ApiBadRequestResponse({ description: 'Refresh token noto‘g‘ri' })

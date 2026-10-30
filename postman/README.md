@@ -32,3 +32,13 @@ python -m json.tool postman/Football-Stadium-Booking-API.postman_collection.json
 ```
 
 Bu buyruq collectionning sintaktik to'g'riligini tekshiradi.
+
+Auth regressiya oqimini qayta bajarish uchun `Auth-Regression.postman_collection.json` faylini Postman'ga import qiling. Collection har iteration uchun alohida email yaratadi; Newman orqali ikki xil foydalanuvchi bilan bajarish:
+
+```bash
+npx --yes --package=newman newman run postman/Auth-Regression.postman_collection.json \
+  --iteration-count 2 \
+  --env-var baseUrl=http://127.0.0.1:3000
+```
+
+Testlar register, login, himoyalangan profilga tokensiz (401) va yaroqli JWT bilan (200) kirish, faol refresh token, logout va logout'dan keyin refresh tokenning rad etilishini tekshiradi. Shu sababli faol refresh alohida logout'dan oldin tekshiriladi; logout'dan keyingi aynan o'sha refresh token 401 qaytarishi kutiladi.
