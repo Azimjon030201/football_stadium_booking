@@ -191,8 +191,8 @@ export class PaymentsService {
     }
     if (Number(dto.amount) !== Number(payment.amount)) {
       throw new BadRequestException({
-        error: 'PAYMENT_AMOUNT_MISMATCH',
-        message: 'Webhook summasi to\'lov summasiga mos kelmadi',
+        error: PaymentErrors.PAYMENT_AMOUNT_MISMATCH,
+        message: 'Webhook summasi to‘lov summasiga mos kelmadi',
       });
     }
     
