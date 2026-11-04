@@ -63,6 +63,7 @@
       "item": [
         {
           "name": "Register user",
+          "description": "Creates a new user account. Use this only for sign-up. This endpoint does not return JWT tokens. On success, HTTP 201 is returned. Duplicate email returns 409.",
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
@@ -74,7 +75,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Abcdef1!\",\n  \"firstName\": \"Botir\",\n  \"lastName\": \"Karimov\",\n  \"phone\": \"+998901234567\"\n}"
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"StrongPass123\",\n  \"firstName\": \"Ali\",\n  \"lastName\": \"Valiyev\",\n  \"phone\": \"+998901234567\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/auth/register",
@@ -88,7 +89,45 @@
               ]
             }
           },
-          "response": [],
+          "response": [
+            {
+              "name": "201 Created - Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"StrongPass123\",\n  \"firstName\": \"Ali\",\n  \"lastName\": \"Valiyev\",\n  \"phone\": \"+998901234567\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/register",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "register"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"id\": \"5e2c1d6d-f8db-4f23-9c14-0f7d2a91d9ef\",\n  \"email\": \"user@example.com\",\n  \"phone\": \"+998901234567\",\n  \"firstName\": \"Ali\",\n  \"lastName\": \"Valiyev\",\n  \"avatarUrl\": null,\n  \"role\": \"USER\",\n  \"isOwnerVerified\": false,\n  \"status\": \"ACTIVE\",\n  \"createdAt\": \"2026-11-04T12:00:00.000Z\",\n  \"updatedAt\": \"2026-11-04T12:00:00.000Z\",\n  \"deletedAt\": null\n}"
+            }
+          ],
           "event": [
             {
               "listen": "test",
@@ -104,6 +143,7 @@
         },
         {
           "name": "Login",
+          "description": "Authenticates a user and returns both accessToken and refreshToken. Store accessToken in Authorization header, and refreshToken for later use in /refresh.",
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
@@ -115,7 +155,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Abcdef1!\"\n}"
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"StrongPass123\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/auth/login",
@@ -129,7 +169,45 @@
               ]
             }
           },
-          "response": [],
+          "response": [
+            {
+              "name": "200 OK - Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"StrongPass123\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "login"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"user\": {\n    \"id\": \"5e2c1d6d-f8db-4f23-9c14-0f7d2a91d9ef\",\n    \"email\": \"user@example.com\"\n  },\n  \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....\",\n  \"refreshToken\": \"8b1a9d4c5bf2c6d4aa3d7c88be2fdb5f2f7f6f0d...\"\n}"
+            }
+          ],
           "event": [
             {
               "listen": "test",
@@ -147,6 +225,7 @@
         },
         {
           "name": "Refresh token",
+          "description": "Generates a new accessToken from a valid refreshToken. The backend checks token expiry and revocation. If refresh token is expired or missing, 401 is returned.",
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
@@ -172,7 +251,45 @@
               ]
             }
           },
-          "response": [],
+          "response": [
+            {
+              "name": "200 OK - New access token",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/refresh",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "refresh"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....\"\n}"
+            }
+          ],
           "event": [
             {
               "listen": "test",
@@ -188,6 +305,7 @@
         },
         {
           "name": "Get current user info",
+          "description": "Returns authenticated user identity from the access token. Requires Authorization: Bearer <accessToken>.",
           "request": {
             "method": "GET",
             "header": [],
@@ -203,7 +321,41 @@
               ]
             }
           },
-          "response": [],
+          "response": [
+            {
+              "name": "200 OK - Authenticated user",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/me",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "me"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"userId\": \"5e2c1d6d-f8db-4f23-9c14-0f7d2a91d9ef\",\n  \"role\": \"USER\"\n}"
+            }
+          ],
           "event": [
             {
               "listen": "test",
@@ -219,12 +371,17 @@
         },
         {
           "name": "Logout",
+          "description": "Revokes the provided refresh token. The endpoint is protected by JWT and expects a valid access token, while the request body still includes the refresh token to delete.",
           "request": {
             "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
               }
             ],
             "body": {
@@ -243,7 +400,49 @@
               ]
             }
           },
-          "response": [],
+          "response": [
+            {
+              "name": "204 No Content - Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/logout",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "logout"
+                  ]
+                }
+              },
+              "status": "No Content",
+              "code": 204,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": ""
+            }
+          ],
           "event": [
             {
               "listen": "test",
