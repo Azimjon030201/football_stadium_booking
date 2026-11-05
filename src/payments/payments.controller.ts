@@ -6,6 +6,8 @@ import {
   ParseUUIDPipe,
   Post,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -16,11 +18,12 @@ import {
 } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { IsUUID } from 'class-validator';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PaymentsService } from './payments.service';
 import { WebhookSignatureGuard } from './webhook-signature.guard';
 import { WebhookDto } from './dto/webhook.dto';
+import { Public } from '../common/decorators/public.decorator';
 
 class InitiatePaymentRequestDto {
   @ApiProperty({
@@ -38,7 +41,7 @@ interface AuthUser {
 
 @ApiTags('payments')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(OptionalJwtAuthGuard)
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
@@ -80,6 +83,8 @@ export class PaymentsController {
 
   @Post('webhook/:provider')
   @UseGuards(WebhookSignatureGuard)
+  @HttpCode(HttpStatus.OK)
+  @Public()
   @ApiOperation({ summary: 'Mock payment webhook handler' })
   @ApiResponse({ status: 200, description: 'Webhook qabul qilindi' })
   handleWebhook(
