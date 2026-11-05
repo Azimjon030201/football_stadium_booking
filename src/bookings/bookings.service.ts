@@ -212,6 +212,19 @@ export class BookingsService {
       });
     }
 
+    const cancellable: BookingStatus[] = [
+  BookingStatus.PENDING,
+  BookingStatus.PAYMENT_PENDING,
+  BookingStatus.CONFIRMED,
+];
+
+if (!cancellable.includes(booking.status)) {
+  throw new ConflictException({
+    error: ErrorCodes.BOOKING_CANCEL_NOT_ALLOWED,
+    message: 'Bu holatdagi bronni bekor qilish mumkin emas',
+  });
+}
+
     return this.prisma.booking.update({
       where: { id },
       data: {
