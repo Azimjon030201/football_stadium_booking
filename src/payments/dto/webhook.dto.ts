@@ -1,9 +1,16 @@
-import { IsIn, IsNotEmpty, IsNumber, IsPositive, IsString } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
-export class WebhookDto {
-  @IsString() @IsNotEmpty() transactionId: string;
-  @IsString() @IsNotEmpty() bookingId: string;   // 7-vazifada IsUUID emas, oddiy test qiymat ham o'tsin
+export class PaymentWebhookDto {
+  @IsString() transactionId: string;
+
+  @IsUUID() bookingId: string;
+
+  @IsString() idempotencyKey: string;
+
   @IsIn(['SUCCESS', 'FAILED']) status: 'SUCCESS' | 'FAILED';
-  @IsNumber() @IsPositive() amount: number;
-  @IsString() @IsNotEmpty() idempotencyKey: string;
+
+  @IsNumber() amount: number;
+
+  // Masalan "INSUFFICIENT_FUNDS" — faqat logga yoziladi
+  @IsOptional() @IsString() @MaxLength(100) failureReason?: string;
 }

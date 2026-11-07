@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '../prisma/prisma.module';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { MockProvider } from './providers/mock-provider';
+import { WebhookSignatureGuard } from './webhook-signature.guard';
 
 @Module({
-  imports: [PrismaModule],
   controllers: [PaymentsController],
-  providers: [PaymentsService, MockProvider],
+  providers: [PaymentsService, MockProvider, WebhookSignatureGuard],
+  exports: [PaymentsService],
 })
 export class PaymentsModule {}

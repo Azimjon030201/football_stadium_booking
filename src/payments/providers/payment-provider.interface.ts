@@ -1,4 +1,3 @@
-
 export interface InitiateParams {
   paymentId: string;
   bookingId: string;
@@ -12,7 +11,10 @@ export interface InitiateResult {
   redirectUrl?: string;
 }
 
+// Strategy pattern (TZ 15.1): yangi provider = yangi klass
 export interface PaymentProviderInterface {
-  readonly name: 'MOCK' | 'CLICK' | 'PAYME' | 'UZUM' | 'STRIPE';
+  readonly name: string;
   initiate(params: InitiateParams): Promise<InitiateResult>;
+  verifySignature(rawBody: Buffer | string | undefined, signature?: string): boolean;
+  refund(transactionId?: string): Promise<void>;
 }

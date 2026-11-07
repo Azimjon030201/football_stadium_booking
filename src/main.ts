@@ -42,3 +42,4 @@ async function bootstrap() {
 }
 
 void bootstrap();
+NestFactory.create(AppModule, { rawBody: true });
