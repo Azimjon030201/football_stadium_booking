@@ -1,17 +1,39 @@
-import { IsOptional, Length, Matches } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsString,
+  Length,
+  Matches,
+  ValidateIf,
+} from 'class-validator';
 
-// DIQQAT: email maydoni ataylab yo'q — email immutable (Assumption A-03).
-// Batafsil: Dev2 qo'llanma, 6-BOB, TASK-02
 export class UpdateProfileDto {
-  @IsOptional()
+  @ApiPropertyOptional({
+    example: 'Abror',
+    minLength: 2,
+    maxLength: 50,
+  })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
   @Length(2, 50)
   firstName?: string;
 
-  @IsOptional()
+  @ApiPropertyOptional({
+    example: 'Xoshimov',
+    minLength: 2,
+    maxLength: 50,
+  })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
   @Length(2, 50)
   lastName?: string;
 
-  @IsOptional()
-  @Matches(/^\+998[0-9]{9}$/)
+  @ApiPropertyOptional({
+    example: '+998901234567',
+  })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Matches(/^\+998[0-9]{9}$/, {
+    message: 'Telefon +998901234567 formatida bo‘lishi kerak',
+  })
   phone?: string;
 }

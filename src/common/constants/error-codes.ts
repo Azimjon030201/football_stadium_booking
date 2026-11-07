@@ -1,29 +1,25 @@
-// Barcha xato kodlari shu yerda markazlashtirilgan.
-// Har bir squad o'z modulidagi xatolarni shu yerga qo'shadi —
-// qo'lda, xotiradan yozib, typo qilishning oldini oladi.
-// Batafsil: Dev2 qo'llanma, 6-BOB, TASK-08
 export const ErrorCodes = {
-  // Auth (Dev1)
+  // Auth
   AUTH_INVALID_CREDENTIALS: 'AUTH_INVALID_CREDENTIALS',
   AUTH_TOKEN_EXPIRED: 'AUTH_TOKEN_EXPIRED',
   AUTH_TOKEN_REUSE_DETECTED: 'AUTH_TOKEN_REUSE_DETECTED',
 
-  // Users / Admin (Dev2)
+  // Users / Admin
   USER_ALREADY_EXISTS: 'USER_ALREADY_EXISTS',
   USER_NOT_FOUND: 'USER_NOT_FOUND',
   USER_BLOCKED: 'USER_BLOCKED',
   FORBIDDEN_RESOURCE: 'FORBIDDEN_RESOURCE',
 
-  // Stadium (Dev3)
+  // Stadium
   STADIUM_NOT_FOUND: 'STADIUM_NOT_FOUND',
   STADIUM_HAS_ACTIVE_BOOKINGS: 'STADIUM_HAS_ACTIVE_BOOKINGS',
   STADIUM_INVALID_STATE: 'STADIUM_INVALID_STATE',
 
-  // Field (Dev4)
+  // Field
   FIELD_NOT_FOUND: 'FIELD_NOT_FOUND',
   FIELD_INACTIVE: 'FIELD_INACTIVE',
 
-  // Booking (Tech Lead)
+  // Booking
   BOOKING_NOT_FOUND: 'BOOKING_NOT_FOUND',
   BOOKING_CONFLICT: 'BOOKING_CONFLICT',
   BOOKING_CANCEL_NOT_ALLOWED: 'BOOKING_CANCEL_NOT_ALLOWED',
@@ -32,7 +28,7 @@ export const ErrorCodes = {
   BOOKING_INVALID_DURATION: 'BOOKING_INVALID_DURATION',
   BOOKING_INVALID_STATE: 'BOOKING_INVALID_STATE',
 
-  // Payment (Dev5)
+  // Payment
   PAYMENT_FAILED: 'PAYMENT_FAILED',
   PAYMENT_NOT_FOUND: 'PAYMENT_NOT_FOUND',
   PAYMENT_ALREADY_PROCESSED: 'PAYMENT_ALREADY_PROCESSED',
@@ -40,4 +36,12 @@ export const ErrorCodes = {
   // Umumiy
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  HTTP_ERROR: 'HTTP_ERROR',
 } as const;
+
+export type ErrorCode =
+  (typeof ErrorCodes)[keyof typeof ErrorCodes];

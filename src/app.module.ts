@@ -9,9 +9,8 @@ import { FieldsModule } from './fields/fields.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
-// Yangi modul qo'shsangiz (Review, Favorite, Notification, Owner, Admin,
-// Audit, Cron — SRS'dagi kichik modullar), shu yerga import qiling.
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -24,6 +23,7 @@ import { PaymentsModule } from './payments/payments.module';
     AvailabilityModule,
     BookingsModule,
     PaymentsModule,
+    ScheduleModule.forRoot(),
   ],
 })
 export class AppModule {}

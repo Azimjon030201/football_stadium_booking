@@ -8,6 +8,8 @@ build/
 # Environment (MAXFIY — hech qachon commit qilinmasin)
 .env
 .env.local
+.env.*
+!.env.example
 
 # Logs
 *.log

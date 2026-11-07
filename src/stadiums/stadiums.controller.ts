@@ -8,70 +8,173 @@ import {
   Delete,
   UseGuards,
   Req,
+  Query,
   HttpCode,
   HttpStatus,
+  ParseEnumPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+  ApiConflictResponse
+} from '@nestjs/swagger';
+import { Request } from 'express';
+import { StadiumStatus } from '@prisma/client';
 import { StadiumsService } from './stadiums.service';
 import { CreateStadiumDto } from './dto/create-stadium.dto';
 import { UpdateStadiumDto } from './dto/update-stadium.dto';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'; 
+import { QueryStadiumsDto } from './dto/query-stadiums.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../common/guards/optional-jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { OwnershipGuard } from '../common/guards/ownership.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+
+type AuthenticatedRequest = Request & {
+  user: {
+    userId: string;
+    role: string;
+  };
+};
 
 @ApiTags('Stadiums')
 @Controller('stadiums')
 export class StadiumsController {
-  constructor(private readonly stadiumsService: StadiumsService) {}
+  constructor(
+    private readonly stadiumsService: StadiumsService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Создать новый стадион (со статусом DRAFT)' })
-  create(@Body() createStadiumDto: CreateStadiumDto, @Req() req: any) {
-    return this.stadiumsService.create(createStadiumDto, req.user.userId);
+  @ApiOperation({ summary: 'Yangi stadion yaratish' })
+  @ApiCreatedResponse({ description: 'Stadion muvaffaqiyatli yaratildi' })
+  @ApiBadRequestResponse({ description: 'Noto‘g‘ri ma’lumotlar' })
+  @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
+  create(
+    @Body() dto: CreateStadiumDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.stadiumsService.create(dto, req.user.userId);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Получить список стадионов' })
-  findAll(@Req() req: any) {
-    return this.stadiumsService.findAll(req?.user);
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: "Stadionlar ro'yxatini olish (pagination)",
+  })
+  @ApiOkResponse({ description: 'Stadionlar ro‘yxati muvaffaqiyatli olindi' })
+  findAll(
+    @Query() query: QueryStadiumsDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.stadiumsService.findAll(query, req.user);
+  }
+
+  @Get('admin/stadiums')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Admin: stadionlar moderatsiyasi' })
+  @ApiOkResponse({ description: 'Admin uchun stadionlar ro‘yxati' })
+  @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
+  @ApiForbiddenResponse({ description: 'Admin ruxsati yo‘q' })
+  getAdminStadiums(
+    @Query('status', new ParseEnumPipe(StadiumStatus, { optional: true }))
+    status?: StadiumStatus,
+  ) {
+    return this.stadiumsService.getAdminStadiums(status);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Получить стадион по ID' })
-  findOne(@Param('id') id: string, @Req() req: any) {
-    return this.stadiumsService.findOne(id, req?.user);
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Stadionni ID bo'yicha olish" })
+  @ApiOkResponse({ description: 'Stadion ma’lumoti muvaffaqiyatli olindi' })
+  @ApiNotFoundResponse({ description: 'Stadion topilmadi' })
+  findOne(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.stadiumsService.findOne(id, req.user);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, OwnershipGuard)
+  @Roles('OWNER', 'ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Обновить данные стадиона' })
+  @ApiOperation({ summary: 'Stadionni yangilash' })
+  @ApiOkResponse({ description: 'Stadion muvaffaqiyatli yangilandi' })
+  @ApiBadRequestResponse({ description: 'Noto‘g‘ri ma’lumotlar' })
+  @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
+  @ApiForbiddenResponse({ description: 'Bu stadionni yangilashga ruxsat yo‘q' })
   update(
     @Param('id') id: string,
-    @Body() updateStadiumDto: UpdateStadiumDto,
-    @Req() req: any,
+    @Body() dto: UpdateStadiumDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.stadiumsService.update(id, updateStadiumDto, req.user.userId);
+    return this.stadiumsService.update(id, dto, req.user);
   }
 
-  @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @Patch('admin/stadiums/:id/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Удалить стадион (Soft delete)' })
-  remove(@Param('id') id: string, @Req() req: any) {
-    return this.stadiumsService.remove(id, req.user.userId);
+  @ApiOperation({ summary: 'Admin: stadionni tasdiqlash' })
+  @ApiOkResponse({ description: 'Stadion tasdiqlandi' })
+  @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
+  @ApiForbiddenResponse({ description: 'Admin ruxsati yo‘q' })
+  approve(@Param('id') id: string) {
+    return this.stadiumsService.approve(id);
+  }
+
+@Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, OwnershipGuard)
+  @Roles('OWNER', 'ADMIN')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Stadionni arxivlash (Soft delete)' })
+  @ApiOkResponse({ description: 'Stadion muvaffaqiyatli arxivlandi' })
+  @ApiBadRequestResponse({ description: 'Noto‘g‘ri so‘rov' })
+  @ApiUnauthorizedResponse({ description: 'Avtorizatsiyadan o‘tilmagan' })
+  @ApiForbiddenResponse({ description: 'Ruxsat yo‘q' })
+  @ApiNotFoundResponse({ description: 'Stadion topilmadi' })
+  @ApiConflictResponse({ 
+    description: 'Faol bronlari bor stadionni arxivlash mumkin emas',
+    schema: {
+      example: {
+        error: 'STADIUM_HAS_ACTIVE_BOOKINGS',
+        message: 'Faol bronlari bor stadionni arxivlash mumkin emas'
+      }
+    }
+  })
+  remove(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.stadiumsService.archive(id, req.user);
   }
 
   @Post(':id/submit')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Отправить стадион на активацию (DRAFT -> ACTIVE)' })
-  @ApiResponse({ status: 200, description: 'Стадион успешно активирован' })
-  @ApiResponse({ status: 403, description: 'Нет доступа (не владелец)' })
-  @ApiResponse({ status: 404, description: 'Стадион не найден' })
-  @ApiResponse({ status: 409, description: 'Стадион находится не в статусе DRAFT' })
-  submit(@Param('id') id: string, @Req() req: any) {
+  @ApiOperation({ summary: 'Stadionni moderatsiyaga yuborish' })
+  @ApiOkResponse({ description: 'Stadion moderatsiyaga muvaffaqiyatli yuborildi' })
+  @ApiUnauthorizedResponse({ description: 'JWT token yaroqsiz' })
+  @ApiNotFoundResponse({ description: 'Stadion topilmadi' })
+  submit(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.stadiumsService.submit(id, req.user.userId);
   }
 }

@@ -1,9 +1,18 @@
-// Barcha to'lov provayderlari (Mock, kelajakda Click/Payme/Uzum) shu
-// interfeysga rioya qiladi (Strategy Pattern).
-// Batafsil: Dev5 qo'llanma, 6-BOB, TASK-02
+
+export interface InitiateParams {
+  paymentId: string;
+  bookingId: string;
+  amount: string;
+  currency: string;
+  idempotencyKey: string;
+}
+
+export interface InitiateResult {
+  transactionId: string;
+  redirectUrl?: string;
+}
+
 export interface PaymentProviderInterface {
-  initiate(
-    amount: number,
-    bookingId: string,
-  ): Promise<{ transactionId: string; status: string }>;
+  readonly name: 'MOCK' | 'CLICK' | 'PAYME' | 'UZUM' | 'STRIPE';
+  initiate(params: InitiateParams): Promise<InitiateResult>;
 }

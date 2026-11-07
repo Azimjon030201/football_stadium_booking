@@ -1,35 +1,91 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { PaymentsService } from './payments.service';
-import { InitiatePaymentDto } from './dto/initiate-payment.dto';
-import { WebhookDto } from './dto/webhook.dto';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProperty,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
+import { IsUUID } from 'class-validator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaymentsService } from './payments.service';
+import { WebhookSignatureGuard } from './webhook-signature.guard';
+import { WebhookDto } from './dto/webhook.dto';
 
-// Batafsil: Dev5 qo'llanma (6-BOB), TASK-04 dan TASK-11 gacha
-@ApiTags('Payments')
+class InitiatePaymentRequestDto {
+  @ApiProperty({
+    description: 'To‘lov qilinadigan bron ID si',
+    format: 'uuid',
+  })
+  @IsUUID()
+  bookingId!: string;
+}
+
+interface AuthUser {
+  userId: string;
+  role: UserRole;
+}
+
+@ApiTags('payments')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('payments')
 export class PaymentsController {
-  constructor(private paymentsService: PaymentsService) {}
+  constructor(private readonly paymentsService: PaymentsService) {}
 
-  @ApiOperation({ summary: "To'lovni boshlash" })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Post('initiate')
-  initiate(@Req() req, @Body() dto: InitiatePaymentDto) {
-    return this.paymentsService.initiate(dto.bookingId, req.user.userId);
+  @ApiOperation({ summary: 'Bron uchun to‘lovni boshlash' })
+  @ApiResponse({ status: 201, description: 'To‘lov boshlandi' })
+  @ApiResponse({ status: 400, description: 'Bron holati noto‘g‘ri' })
+  @ApiResponse({ status: 403, description: 'Bron sizga tegishli emas' })
+  @ApiResponse({ status: 404, description: 'Bron topilmadi' })
+  initiatePayment(
+    @Body() dto: InitiatePaymentRequestDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.paymentsService.initiatePayment(
+      dto.bookingId,
+      user.userId,
+    );
   }
 
-  @ApiOperation({ summary: "Provayder webhook (Guard YO'Q — server-to-server)" })
-  @Post('webhook/mock')
-  webhook(@Body() dto: WebhookDto) {
-    return this.paymentsService.handleWebhook(dto);
-  }
-
-  @ApiOperation({ summary: "To'lov holatini ko'rish" })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req) {
-    return this.paymentsService.findOne(id, req.user.userId, req.user.role);
+  @ApiOperation({
+    summary: 'To‘lov holatini tekshirish (egasi / stadion egasi / Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'To‘lov ma’lumoti' })
+  @ApiResponse({ status: 400, description: 'Noto‘g‘ri UUID' })
+  @ApiResponse({ status: 403, description: 'FORBIDDEN_RESOURCE' })
+  @ApiResponse({ status: 404, description: 'PAYMENT_NOT_FOUND' })
+  findOne(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.paymentsService.findOne(
+      id,
+      user.userId,
+      user.role,
+    );
+  }
+
+  @Post('webhook/:provider')
+  @UseGuards(WebhookSignatureGuard)
+  @ApiOperation({ summary: 'Mock payment webhook handler' })
+  @ApiResponse({ status: 200, description: 'Webhook qabul qilindi' })
+  handleWebhook(
+    @Param('provider') provider: string,
+    @Body() dto: WebhookDto,
+  ) {
+    return this.paymentsService.handleWebhook(provider, dto);
   }
 }

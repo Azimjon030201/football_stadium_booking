@@ -87,6 +87,7 @@ enum NotificationType {
   STADIUM_APPROVED
   STADIUM_REJECTED
   ACCOUNT_BLOCKED
+  PAYMENT_FAILED
 }
 
 // ============================================================

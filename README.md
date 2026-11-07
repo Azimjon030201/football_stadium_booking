@@ -1,131 +1,436 @@
-# Football Mini Stadium Booking Platform — Backend
+# Football Stadium Booking API
 
-NestJS + Prisma + PostgreSQL asosidagi backend API skeletoni.
+Bu loyiha football stadium booking backend API bo'lib, NestJS, Prisma ORM va PostgreSQL bilan yaratilgan. Asosiy maqsad: foydalanuvchilarni ro'yxatdan o'tkazish, stadion va maydonlarni boshqarish, bron qilish, to'lov va webhooklar bilan ishlash, shuningdek Swagger orqali API dokumentatsiyasini taqdim etish.
 
-> **Bu — ARXITEKTURA skeleti.** Controller'lar va DTO'lar (API shakli) tayyor,
-> lekin Service metodlari ichida **TODO** izohlar bilan bo'sh qoldirilgan —
-> har bir dasturchi o'z PDF qo'llanmasidagi TASK raqamiga mos joyni topib,
-> shu yerdan implement qilishni boshlaydi.
+## A. Loyiha haqida
 
-## Talablar
+Football Stadium Booking loyihasi futbol stadioni yoki mini-stadionlarni bron qilish va boshqarish uchun xizmat ko'rsatuvchi backend API hisoblanadi. Loyihaning asosiy funksionalligi quyidagilarni o'z ichiga oladi:
 
-- Docker va Docker Compose
-- Node.js 20+
+- foydalanuvchi autentifikatsiyasi va avtorizatsiyasi
+- stadion va maydonlarni yaratish, yangilash va qarash
+- maydonlar uchun ishlash soatlari va mavjudlik ma'lumotlari
+- bron qilish va bekor qilish logikasi
+- to'lovni boshlash va mock/webhook tasdiqlash
+- JWT orqali himoyalangan endpointlar
+- Swagger orqali API dokumentatsiyasi
 
-## O'rnatish
+Amalda ishlatiladigan texnologiyalar:
 
-```bash
-git clone <repo-url>
-cd football-stadium-booking
-cp .env.example .env          # keyin .env faylini oching, qiymatlarni tekshiring
-docker compose up -d postgres
-npm install
-npx prisma generate
-npx prisma migrate deploy     # tayyor migratsiyani qo'llaydi (prisma/migrations/ papkasida)
-npm run start:dev
-```
+- NestJS 10
+- TypeScript 5
+- Prisma 6
+- PostgreSQL 16
+- Docker + Docker Compose
+- JWT (Passport + NestJS JWT)
+- Swagger / OpenAPI
+- Jest uchun testlar
 
-Server: `http://localhost:3000`
-Swagger: `http://localhost:3000/api/docs`
+## B. Talab qilinadigan dasturlar
 
-## Loyiha strukturasi va kim qayerda ishlaydi
+Loyihani to'g'ri ishga tushirish uchun quyidagi dasturlar o'rnatilgan bo'lishi kerak:
 
-```
-src/
-├── auth/                 → Dev1 (Authentication)
-│   ├── dto/               register, login, refresh-token, change-password
-│   ├── strategies/         jwt.strategy.ts
-│   ├── auth.service.ts     ← TASK-01...TASK-10 shu yerda (TODO)
-│   ├── auth.controller.ts  route'lar tayyor
-│   └── auth.module.ts
-│
-├── users/                → Dev2 (Authorization & Users)
-│   ├── dto/                update-profile.dto.ts
-│   └── users.service.ts    ← TASK-01,02,10,11 shu yerda (TODO)
-│
-├── stadiums/              → Dev3 (Stadium Management)
-│   ├── dto/                create-stadium, update-stadium
-│   └── stadiums.service.ts ← TASK-01...TASK-12 shu yerda (TODO)
-│
-├── fields/                → Dev4 (Field, Working Hours & Search)
-│   ├── dto/                create-field, update-field, working-hour
-│   └── fields.service.ts   ← TASK-01...TASK-11 shu yerda (TODO)
-│
-├── payments/               → Dev5 (Mock Payment & Webhook)
-│   ├── dto/                initiate-payment, webhook
-│   ├── providers/          payment-provider.interface.ts, mock-provider.ts (TODO)
-│   └── payments.service.ts ← TASK-04...TASK-10 shu yerda (TODO)
-│
-├── bookings/               → Tech Lead (siz)
-├── availability/           → Tech Lead (siz)
-│
-├── common/                 → cross-cutting: barcha squad foydalanadi
-│   ├── decorators/          @Roles(), @CurrentUser()
-│   ├── guards/               JwtAuthGuard (Dev1), RolesGuard (Dev2, TODO)
-│   ├── filters/               AllExceptionsFilter (Dev2, TODO)
-│   └── constants/              error-codes.ts (markazlashtirilgan xato kodlari)
-│
-├── prisma/                  PrismaService (global, tayyor)
-├── app.module.ts            barcha modullarni bog'laydi
-└── main.ts                  bootstrap, Swagger, ValidationPipe
+- Git
+- Node.js 20.x va npm
+- Docker Desktop
+- Docker Compose v2
+- PostgreSQL 16 (agar Docker orqali emas, alohida o'rnatish kerak bo'lsa)
 
-prisma/
-├── schema.prisma            barcha modellar (SRS asosida, tayyor)
-├── migrations/               boshlang'ich migratsiya TAYYOR va sinalgan
-│   └── 20260923080000_init/  (haqiqiy PostgreSQL'da sinaldi — 15 jadval, barcha FK'lar)
-└── seed.ts                  → Dev6, TASK-06 (TODO)
+Bu loyihadagi haqiqiy konfiguratsiya quyidagilarga asoslanadi:
 
-test/
-├── jest-e2e.json
-└── booking-conflict.e2e-spec.ts   → Dev6 + Tech Lead, TASK-08 (TODO)
-```
+- `package.json` ichida NestJS 10 va Prisma 6 ishlatilgan
+- `Dockerfile` `node:20-alpine` ni ishlatadi
+- `docker-compose.yml` PostgreSQL 16 Alpine image'ini o'z ichiga oladi
+- `.env.example` da `POSTGRES_PORT=5433` va `DATABASE_URL` ko'rsatilgan
 
-## Qanday ishlash kerak (har bir dasturchi uchun)
+## C. Loyihani yuklab olish
 
-1. O'zingizning PDF qo'llanmangizni oching (masalan `Dev1_Auth_TOLIQ_Qollanma.pdf`)
-2. `git checkout -b feature/<nomi>` — yangi branch oching
-3. Yuqoridagi jadvaldan o'z papkangizni toping
-4. Service faylidagi `TODO (DevN TASK-XX): ...` izohlarni birma-bir toping va
-   implement qiling — qo'llanmangizdagi kod namunasi va tushuntirish shu
-   TASK raqami ostida yozilgan
-5. Controller'ga tegmang (agar yangi endpoint qo'shish kerak bo'lmasa) —
-   route'lar allaqachon to'g'ri sozlangan
-6. Postman'da sinab ko'ring, PR oching
-
-## Muhim arxitektura qoidalari (buzmang)
-
-- **Guard tartibi:** `@UseGuards(JwtAuthGuard, RolesGuard)` — JwtAuthGuard
-  HAR DOIM birinchi.
-- **Nested ownership:** Field'da `ownerId` yo'q — `field.stadium.ownerId`
-  orqali tekshiriladi. Xuddi shunday Payment'da `payment.booking.userId`.
-- **Status maydonlari erkin o'zgarmaydi:** Stadium/Booking/Payment status'i
-  faqat maxsus metodlar orqali (masalan `submit()`, `handleWebhook()`)
-  o'zgaradi, oddiy `update()` orqali emas.
-- **Server har doim o'zi belgilaydi:** `ownerId`, `status` kabi maydonlar
-  hech qachon so'rov body'sidan olinmaydi.
-- **Xato kodlari:** `src/common/constants/error-codes.ts`'dan foydalaning,
-  qo'lda string yozmang.
-
-## Migratsiyalar
+Agar repository URL ma'lum bo'lsa, haqiqiy manzilni ishlating. Agar noma'lum bo'lsa, placeholderdan foydalaning.
 
 ```bash
-# Development — yangi model/maydon qo'shganda:
-npx prisma migrate dev --name <tavsif>
+git clone [REPOSITORY_URL]
+cd football_stadium_booking
+```
 
-# Production — faqat mavjud migratsiyalarni qo'llash:
+## D. Environment sozlamalari
+
+Loyihaning `.env.example` fayli asosida `.env` yarating.
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Git Bash / bash / zsh:
+
+```bash
+cp .env.example .env
+```
+
+Keyin `.env` faylini ochib, qiymatlarni o'zingizga moslashtiring.
+
+### Asosiy environment variable'lar
+
+`.env.example` faylida mavjud bo'lgan haqiqiy o'zgaruvchilar:
+
+| O'zgaruvchi | Majburiy | Tavsif |
+|---|---:|---|
+| `DATABASE_URL` | Ha | PostgreSQL connection string. Local dev uchun `postgresql://postgres:postgres@localhost:5433/stadium_db` ko'rinishida bo'ladi. |
+| `JWT_ACCESS_SECRET` | Ha | Access token uchun maxfiy kalit. Uzoq va tasodifiy bo'lishi kerak. |
+| `JWT_REFRESH_SECRET` | Ha | Refresh token uchun maxfiy kalit. |
+| `PORT` | Ha | Backend server porti. Dasturda default qiymat `3000` ishlatiladi. |
+| `CORS_ORIGIN` | Ixtiyoriy | Frontend manbai. Misol: `http://localhost:5173` |
+| `NODE_ENV` | Ixtiyoriy | `development` yoki `production` |
+| `POSTGRES_DB` | Ha | Docker orqali ishlatiladigan PostgreSQL baza nomi |
+| `POSTGRES_USER` | Ha | PostgreSQL foydalanuvchi nomi |
+| `POSTGRES_PASSWORD` | Ha | PostgreSQL paroli |
+| `POSTGRES_PORT` | Ha | Local hostdagi PostgreSQL porti, `.env.example` bo'yicha `5433` |
+| `PAYMENT_WEBHOOK_SECRET` | Ixtiyoriy | Webhook tasdiqlash uchun secret |
+| `JWT_ACCESS_TTL` | Ixtiyoriy | Access token muddati, misol: `15m` |
+| `JWT_REFRESH_TTL` | Ixtiyoriy | Refresh token muddati, misol: `30d` |
+| `APP_TIMEZONE` | Ixtiyoriy | `Asia/Tashkent` |
+| `CANCELLATION_DEADLINE_MINUTES` | Ixtiyoriy | Bekor qilish uchun vaqt chegarasi, misol: `120` |
+| `MAX_BOOKING_DURATION_MINUTES` | Ixtiyoriy | Mavjud bo'lishi mumkin bo'lgan maksimal bronlash davomiyligi |
+| `PAYMENT_EXPIRATION_MINUTES` | Ixtiyoriy | To'lov muddati |
+| `ALLOW_NON_LOCAL_DB` | Ixtiyoriy | Prisma guard uchun ishlatiladi. Local DBdan tashqari DB ishlatishda `true` qo'yiladi. |
+
+Eslatma:
+
+- `.env` faylida haqiqiy parollar va secretnar yoziladi.
+- Hech qachon `.env` ni Git'ga qo'shmang.
+- `.env.example` faqat namuna sifatida saqlanadi.
+- Ushbu loyiha `src/app.module.ts` va `src/auth/auth.module.ts` dagi `ConfigModule` orqali environment o'zgaruvchilarini o'qiydi.
+
+## E. Docker orqali ishga tushirish
+
+Loyiha ildizida quyidagi buyruqlarni bajaring:
+
+```bash
+docker compose up -d --build
+```
+
+Bu buyruq:
+
+- PostgreSQL konteynerini yaratadi
+- backend image'ini quradi
+- backend va DB ni birgalikda ko'taradi
+
+Konteynerlar holatini tekshirish:
+
+```bash
+docker compose ps
+docker compose logs -f
+```
+
+Agar faqat backend yoki PostgreSQL loglarini ko'rmoqchi bo'lsangiz:
+
+```bash
+docker compose logs -f backend
+docker compose logs -f postgres
+```
+
+Agar loyiha ishlashi to'xtatilsa:
+
+```bash
+docker compose down
+```
+
+`pgdata` volume'ini ham tozalamoqchi bo'lsangiz:
+
+```bash
+docker compose down -v
+```
+
+> `-v` ishlatilsa, PostgreSQL ma'lumotlari to'liq o'chiriladi. Bu faqat ma'lumotlar kerak bo'lmasa ishlatiladi.
+
+Docker Desktop ishlamayotgan bo'lsa:
+
+- Docker Desktop ni ishga tushiring
+- Docker daemon ishlayotganligini tekshiring
+- Keyin yuqoridagi `docker compose ...` buyrug'ini qayta bajaring
+
+## F. Prisma va database migration
+
+`package.json` da quyidagi Prisma skriptlar mavjud:
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+npm run prisma:migrate:create
+npm run prisma:validate
+npm run prisma:status
+npm run prisma:deploy
+npm run prisma:studio
+```
+
+Prisma schema fayli: `prisma/schema.prisma`
+
+Migratsiyalar papkasi: `prisma/migrations/`
+
+Mavjud repositoryda migratsiyalar allaqachon mavjud. Shuning uchun yangi ishga tushirish uchun migratsiyalarni qo'llash kerak:
+
+```bash
 npx prisma migrate deploy
 ```
 
-## Testlar
+Agar local development bazasida schema yoki yangi migration yaratish kerak bo'lsa:
 
 ```bash
-npm run test          # unit testlar
-npm run test:e2e      # end-to-end testlar
+npm run prisma:migrate -- --name add_booking_status_index
 ```
 
-## Muhim eslatma: GiST Exclusion Constraint
+Yoki an'anaviy:
 
-Double-booking'ni DB darajasida oldini olish uchun (`bookings` jadvalida)
-`tstzrange` ustuni + GiST Exclusion Constraint kerak. Bu Prisma DSL orqali
-ifodalanmaydi — Tech Lead tomonidan **raw SQL migration** orqali qo'shiladi
-(SRS 12.3-band). Booking Engine implement qilinguncha bu qo'shilmagan.
+```bash
+npx prisma migrate dev
+```
+
+### Faqat qaysi muhitda qaysi buyruq ishlatiladi?
+
+- Local development: `npx prisma migrate dev` yoki `npm run prisma:migrate`
+- Existing migration files from repo: `npx prisma migrate deploy`
+- Production/staging: faqat `npx prisma migrate deploy`
+
+> `migrate dev`, `migrate reset` yoki `db push` production uchun ishlatilmaydi. Ular schema va migration tarixini xavf ostiga qo'yishi mumkin.
+
+`prisma-dev-guard.js` skripti `DATABASE_URL` va `NODE_ENV` ni tekshiradi. Agar host production/remote bo'lsa yoki `NODE_ENV=production` bo'lsa, xavfli migrate dev buyruqlari bloklanadi.
+
+### Seed ma'lumotlari
+
+Proyektida `prisma/seed.ts` fayli mavjud bo'lib, local development/test bazasida demo uchun professional boshlang'ich ma'lumotlarni yaratadi. Seed maqsadi:
+
+- admin, owner va oddiy user hisoblarini yaratish
+- real ko‘rinadigan stadion nomlari va manzillarini kiritish
+- har bir stadion uchun 2 ta maydon yaratish
+- maydonlar uchun ish vaqtlari, narx va statuslarni to‘g‘ri belgilash
+- booking va payment ma'lumotlarining schema bo‘yicha to‘g‘ri bog‘lanishini ta'minlash
+- takroriy ishga tushirishda dublikat hosil bo‘lmasligini kafolatlash
+
+Seed ni quyidagicha ishga tushiring:
+
+```bash
+npx prisma generate
+npx prisma db seed
+```
+
+Yoki skript orqali:
+
+```bash
+npm run seed
+```
+
+`prisma/schema.prisma` va `package.json` ichidagi haqiqiy scriptlarni qo‘llash orqali seed local yoki demo DB da xavfsiz va takroran ishlaydi. Seed `.env` faylini ham o‘qiydi; shell orqali berilgan environment qiymatlari ustun turadi. Docker Compose ishlatilganda backend konteyneridagi `postgres` hostname ishlatiladi.
+
+### Demo hisoblar
+
+Demo login ma'lumotlari alohida hujjatda berilgan:
+
+- `docs/demo-credentials.md`
+
+Asosiy demo hisoblar:
+
+| Rol | Email | Parol |
+|---|---|---|
+| Admin | `admin@stadium.local` | `Admin123!` |
+| Owner | `owner1@stadium.local` | `Owner123!` |
+| Owner | `owner2@stadium.local` | `Owner123!` |
+| User | `user1@stadium.local` | `User123!` |
+| User | `user2@stadium.local` | `User123!` |
+| User | `user3@stadium.local` | `User123!` |
+
+Seed scripti idempotent bo‘lib, mavjud demo email, stadion nomi, field nomi va booking/payments kombinatsiyalari qayta yaratmaydi. Mavjud foydalanuvchining paroli, roli yoki profil ma'lumotlari qayta yozilmaydi. Working Hours uchun `@@unique([fieldId, dayOfWeek])` kaliti bo‘yicha `upsert` ishlatiladi, shuning uchun mavjud ish jadvali o‘zgartirilmaydi.
+
+Xavfsizlik: seed `NODE_ENV=production` bo‘lganda to‘xtaydi va `DATABASE_URL` hosti `localhost`, `127.0.0.1`, `::1`, `postgres` yoki `host.docker.internal` bo‘lmasa ham standart holatda bloklanadi. `ALLOW_NON_LOCAL_DB=true` faqat aniq development/test bazasi uchun qo‘llaniladi. Hech qachon production bazada seed ishlatmang.
+
+### Postman collection va demo ma'lumotlar
+
+Frontend dasturchilar uchun tayyorlangan Postman collection fayli:
+
+- `postman/Football-Stadium-Booking.postman_collection.json`
+
+Seed ma'lumotlari va login namunalari uchun qo‘shimcha hujjat:
+
+- `postman/SEED_DATA.md`
+- `docs/demo-credentials.md`
+
+Import qilish uchun Postman'da Import -> File tanlang, so'ngra yuqoridagi JSON faylini tanlang. Base URL sifatida `http://localhost:3000` ishlating.
+
+Agar `.env` fayl mavjud bo'lmasa, avval namuna fayldan nusxa oling:
+
+```bash
+Copy-Item .env.example .env
+# yoki
+cp .env.example .env
+```
+
+## G. Backendni ishga tushirish
+
+Avval dependency'larni o'rnating:
+
+```bash
+npm install
+```
+
+Lokal development rejimida:
+
+```bash
+npm run start:dev
+```
+
+Agar build qilish kerak bo'lsa:
+
+```bash
+npm run build
+```
+
+Production-like start:
+
+```bash
+npm run start:prod
+```
+
+> `src/main.ts` da `app.setGlobalPrefix('api')` ishlatilgan. Demak, backend API endpointlari `/api/...` ko'rinishida ishlaydi.
+
+## H. Swagger API hujjatlari
+
+Swagger konfiguratsiyasi `src/main.ts` faylida sozlangan. U quyidagi URL orqali ochiladi:
+
+```text
+http://localhost:3000/api/docs
+```
+
+Haqiqiy endpointlar `/api` prefiksi ostida bo'ladi. Masalan auth endpointlari:
+
+```text
+http://localhost:3000/api/auth/login
+http://localhost:3000/api/auth/register
+```
+
+## I. Postman Collection
+
+Proyektda Postman collection va environment fayllari mavjud:
+
+- `postman/Football-Stadium-Booking-API.postman_collection.json`
+- `postman/Football-Stadium-Booking-API.postman_environment.json`
+
+Ularni Postman'ga import qiling:
+
+1. Postman ni oching
+2. Import -> File
+3. `postman/Football-Stadium-Booking-API.postman_collection.json` ni tanlang
+4. `postman/Football-Stadium-Booking-API.postman_environment.json` ni ham import qiling
+
+Environment sozlamalari:
+
+- `baseUrl` = `http://localhost:3000`
+- `token` = login bo'lgandan keyin avtomatik to'ldiriladi
+- `refreshToken` = refresh token uchun ishlatiladi
+- `userId`, `stadiumId`, `fieldId`, `bookingId`, `paymentId` = kerak bo'lganda to'ldiriladi
+
+Login qilishdan so'ng, Postman auth tokenini ishlatib protected endpointlarga murojaat qilishingiz mumkin.
+
+## J1. Concurrent booking testi va CI
+
+Booking conflict / double-booking himoyasini tekshirish uchun alohida skript mavjud:
+
+```bash
+npm run test:booking-conflict
+```
+
+Ushbu skript `test/booking-conflict.e2e-spec.ts` faylini `jest-e2e` konfiguratsiyasi bilan ishga tushiradi. Test ikkita parallel booking so'rovini yuboradi va quyidagilarni tekshiradi:
+
+- faqat bittasi muvaffaqiyatli bo'lishi kerak;
+- ikkinchisi `409 Conflict` va `BOOKING_CONFLICT` qaytarishi kerak;
+- database'da shu field va vaqt oralig'i uchun faqat bitta booking mavjud bo'lishi kerak.
+
+Agar booking engine o'zgartirilsa yoki Prisma schema/migration o'zgargan bo'lsa, quyidagi holatlarda ushbu testni qayta ishlatish kerak:
+
+- booking service/controller o'zgartirilganda;
+- Prisma schema yoki migrationlar o'zgartirilganda;
+- pull requestdan oldin;
+- booking conflict bug'ini tuzatsangiz.
+
+## J. Muammolarni hal qilish
+
+| Muammo | Sabab | Yechim |
+|---|---|---|
+| Docker daemon ishlamayapti | Docker Desktop yoki daemon ishlamayotgan | Docker Desktop ni ishga tushiring va `docker ps` bilan tekshiring |
+| `DATABASE_URL` noto'g'ri | `.env` yoki connection string xato | `.env.example` ni `.env` ga ko'chiring va `DATABASE_URL` ni tekshiring |
+| PostgreSQL ulanishi muvaffaqiyatsiz | DB ishlamayapti yoki port mos kelmayapti | `docker compose ps` yoki `pg_isready` ni tekshiring; `5433`/`5432` portlarini solishtiring |
+| Prisma migration xatosi | Migrate holati yoki schema mos kelmayapti | `npx prisma validate`, `npx prisma migrate status`, keyin `npx prisma migrate deploy` ishlating |
+| Port band | `3000` yoki `5433` allaqachon ishlatilmoqda | `netstat -ano | findstr :3000` yoki Docker portlarni tekshiring |
+| Environment variable topilmadi | `.env` yaratilmagan yoki yozuvlar yetishmayapti | `.env.example` dan nusxa oling: `cp .env.example .env` |
+| TypeScript build xatosi | Dependency yoki kode xatosi | `npm install` qilib, keyin `npm run build` ni qayta ishlating |
+| JWT secret topilmadi | `.env` da `JWT_ACCESS_SECRET` yoki `JWT_REFRESH_SECRET` yo'q | `.env` da kerakli secretlarni yozing |
+| `PrismaClient` eski | Prisma generate qilinmagan | `npx prisma generate` |
+
+## K. Loyiha tuzilishi
+
+Asosiy papkalar va fayllar:
+
+```text
+.
+├── .env.example               # environment namuna fayli
+├── .gitignore                 # maxfiy va build fayllarini qamrab oladi
+├── Dockerfile                 # backend image uchun multi-stage build
+├── docker-compose.yml         # PostgreSQL + backend servicelarini birgalikda boshqaradi
+├── package.json               # scripts va dependency'lar
+├── prisma/
+│   ├── schema.prisma          # Prisma model va datasource konfiguratsiyasi
+│   ├── seed.ts                # ma'lumotlarni to'ldirish uchun seed skripti
+│   └── migrations/            # mavjud Prisma migratsiyalari
+├── scripts/
+│   └── prisma-dev-guard.js    # local dev uchun xavfsizlik tekshiruvi
+├── src/
+│   ├── app.module.ts          # app modulni birlashtiruvchi fayl
+│   ├── main.ts                # NestJS bootstrap, Swagger, CORS, ValidationPipe
+│   ├── auth/                  # autentifikatsiya va JWT
+│   ├── users/                 # foydalanuvchi boshqaruvi
+│   ├── stadiums/              # stadionlar
+│   ├── fields/                # maydonlar va ishlash soatlari
+│   ├── availability/          # mavjudlik hisoblashlari
+│   ├── bookings/              # bron qilish logikasi
+│   ├── payments/              # to'lovlar va webhooklar
+│   ├── common/                # guardlar, filterlar, decorators, error kodlari
+│   └── prisma/                # PrismaService
+├── postman/
+│   ├── Football-Stadium-Booking-API.postman_collection.json
+│   └── Football-Stadium-Booking-API.postman_environment.json
+├── test/
+│   ├── booking-conflict.e2e-spec.ts
+│   └── jest-e2e.json
+├── README.md
+└── nest-cli.json
+```
+
+## Ishga tushirishning tezkor ko'rsatma
+
+Agar yangi dasturchi loyiha papkasini bo'shatib olgan bo'lsa, quyidagi ketma-ketlikni bajarishi kifoya:
+
+```bash
+git clone [REPOSITORY_URL]
+cd football_stadium_booking
+Copy-Item .env.example .env
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run start:dev
+```
+
+Yoki Docker bilan:
+
+```bash
+git clone [REPOSITORY_URL]
+cd football_stadium_booking
+Copy-Item .env.example .env
+docker compose up -d --build
+docker compose ps
+```
+
+Keyin brauzerda quyidagi manzilni oching:
+
+```text
+http://localhost:3000/api/docs
+```
+
+Bu loyiha uchun loyiha kodiga asoslangan holda tayyorlangan README bo'lib, oldingi tavsiyalar va env variable'lar haqiqiy konfiguratsiyaga mos keladi.

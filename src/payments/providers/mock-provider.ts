@@ -1,16 +1,19 @@
-import { Injectable } from '@nestjs/common';
-import { PaymentProviderInterface } from './payment-provider.interface';
 
-// TASK-03 (Dev5, Hafta 1): MockProvider — soxta to'lov provayderi.
-// To'lovni darhol "muvaffaqiyatli" deb simulyatsiya qilishi kerak.
-// Namuna: transactionId generatsiya qiling (masalan uuid orqali),
-// { transactionId, status: 'SUCCESS' } qaytaring.
+import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import {
+  InitiateParams,
+  InitiateResult,
+  PaymentProviderInterface,
+} from './payment-provider.interface';
+
 @Injectable()
 export class MockProvider implements PaymentProviderInterface {
-  async initiate(
-    amount: number,
-    bookingId: string,
-  ): Promise<{ transactionId: string; status: string }> {
-    throw new Error('TODO (Dev5 TASK-03): MockProvider.initiate() implement qilinmagan');
+  readonly name = 'MOCK' as const;
+
+  async initiate(params: InitiateParams): Promise<InitiateResult> {
+    // Mock: haqiqiy provider yo'q. Natija webhook orqali keladi (BR-PAY-1).
+    void params;
+    return { transactionId: `mock-tx-${randomUUID()}` };
   }
 }

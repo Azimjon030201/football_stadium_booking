@@ -1,15 +1,17 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { UserRole, UserStatus } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -75,10 +77,13 @@ export class AuthService {
       });
     }
 
-    const accessToken = this.jwtService.sign({
-      sub: user.id,
-      role: user.role,
-    });
+    // Token yaratishdan oldin hisob holatini tekshiramiz.
+    this.checkAccountStatus(user);
+
+    const accessToken = this.createAccessToken(
+      user.id,
+      user.role,
+    );
 
     const refreshToken = crypto.randomBytes(40).toString('hex');
 
@@ -116,12 +121,14 @@ export class AuthService {
       .digest('hex');
 
     const stored = await this.prisma.refreshToken.findUnique({
-      where: {
-        tokenHash,
-      },
+      where: { tokenHash },
     });
 
-    if (!stored || stored.expiresAt < new Date()) {
+    if (
+      !stored ||
+      stored.revokedAt ||
+      stored.expiresAt <= new Date()
+    ) {
       throw new UnauthorizedException({
         error: 'AUTH_TOKEN_EXPIRED',
       });
@@ -139,16 +146,35 @@ export class AuthService {
       });
     }
 
-    const accessToken = this.jwtService.sign({
-      sub: user.id,
-      role: user.role,
-    });
+    // Bloklangan hisob refresh orqali ham token ololmaydi.
+    this.checkAccountStatus(user);
 
-    return {
-      accessToken,
-    };
+    const accessToken = this.createAccessToken(
+      user.id,
+      user.role,
+    );
+
+    return { accessToken };
   }
-    async changePassword(
+
+  async logout(refreshToken?: string) {
+    if (!refreshToken) {
+      return;
+    }
+
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('hex');
+
+    await this.prisma.refreshToken
+      .delete({
+        where: { tokenHash },
+      })
+      .catch(() => undefined);
+  }
+
+  async changePassword(
     userId: string,
     dto: ChangePasswordDto,
   ) {
@@ -160,13 +186,17 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
+    this.checkAccountStatus(user);
+
     const isPasswordValid = await bcrypt.compare(
       dto.oldPassword,
       user.passwordHash,
     );
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Old password is incorrect');
+      throw new UnauthorizedException(
+        'Old password is incorrect',
+      );
     }
 
     const newPasswordHash = await bcrypt.hash(
@@ -184,5 +214,37 @@ export class AuthService {
     return {
       message: 'Password changed successfully',
     };
+  }
+
+  private checkAccountStatus(user: {
+    status: UserStatus;
+    deletedAt: Date | null;
+  }): void {
+    if (
+      user.deletedAt ||
+      user.status === UserStatus.DELETED
+    ) {
+      throw new UnauthorizedException({
+        error: 'AUTH_INVALID_CREDENTIALS',
+        message: 'Foydalanuvchi mavjud emas yoki o‘chirilgan',
+      });
+    }
+
+    if (user.status === UserStatus.BLOCKED) {
+      throw new ForbiddenException({
+        error: 'USER_BLOCKED',
+        message: 'Hisobingiz bloklangan',
+      });
+    }
+  }
+
+  private createAccessToken(
+    userId: string,
+    role: UserRole,
+  ) {
+    return this.jwtService.sign({
+      sub: userId,
+      role,
+    });
   }
 }

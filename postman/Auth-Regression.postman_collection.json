@@ -1,0 +1,355 @@
+{
+  "info": {
+    "_postman_id": "football-stadium-booking-auth-regression-2026",
+    "name": "Football Stadium Booking - Auth Regression",
+    "description": "Register, login, JWT-protected profile, valid refresh, logout, then verify the logged-out refresh token is rejected.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Register user",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('testEmail', 'auth-regression-' + pm.variables.replaceIn('{{$guid}}') + '@example.com');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Register returns HTTP 201', function () { pm.expect(pm.response.code).to.equal(201); });",
+              "pm.test('Registration returns the requested user without a password hash', function () { const json = pm.response.json(); pm.expect(json.id).to.be.a('string').and.not.empty; pm.expect(json.email).to.equal(pm.collectionVariables.get('testEmail')); pm.expect(json).not.to.have.property('passwordHash'); pm.collectionVariables.set('userId', json.id); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"RegressionPass123!\",\n  \"firstName\": \"Regression\",\n  \"lastName\": \"Tester\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "register"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login returns HTTP 201', function () { pm.expect(pm.response.code).to.equal(201); });",
+              "pm.test('Login returns access and refresh tokens for the registered user', function () { const json = pm.response.json(); pm.expect(json.user.email).to.equal(pm.collectionVariables.get('testEmail')); pm.expect(json.accessToken).to.be.a('string').and.not.empty; pm.expect(json.refreshToken).to.be.a('string').and.not.empty; pm.collectionVariables.set('accessToken', json.accessToken); pm.collectionVariables.set('refreshToken', json.refreshToken); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"RegressionPass123!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "login"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Protected endpoint rejects missing JWT",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Protected endpoint without JWT returns HTTP 401', function () { pm.expect(pm.response.code).to.equal(401); });",
+              "pm.test('Missing JWT returns the expected auth error', function () { const json = pm.response.json(); pm.expect(json.success).to.equal(false); pm.expect(json.statusCode).to.equal(401); pm.expect(json.error).to.equal('UNAUTHORIZED'); pm.expect(json.path).to.equal('/api/auth/me'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "me"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Protected current user",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('JWT-protected endpoint returns HTTP 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+              "pm.test('JWT identifies the logged-in user', function () { const json = pm.response.json(); pm.expect(json.userId).to.equal(pm.collectionVariables.get('userId')); pm.expect(json.role).to.equal('USER'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "me"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Refresh active token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Refresh returns HTTP 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+              "pm.test('Refresh returns a new access token', function () { const json = pm.response.json(); pm.expect(json.accessToken).to.be.a('string').and.not.empty; pm.collectionVariables.set('accessToken', json.accessToken); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "refresh"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Logout",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Logout returns HTTP 204 with no response body', function () { pm.expect(pm.response.code).to.equal(204); pm.expect(pm.response.text()).to.equal(''); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/logout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "logout"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Refresh revoked token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Refresh after logout is rejected with HTTP 401', function () { pm.expect(pm.response.code).to.equal(401); });",
+              "pm.test('Revoked token returns the expected auth error', function () { const json = pm.response.json(); pm.expect(json.success).to.equal(false); pm.expect(json.statusCode).to.equal(401); pm.expect(json.error).to.equal('AUTH_TOKEN_EXPIRED'); pm.expect(json.path).to.equal('/api/auth/refresh'); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/refresh",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "refresh"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
