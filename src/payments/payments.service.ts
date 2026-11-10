@@ -2,247 +2,205 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
+  Logger,
+  
 } from '@nestjs/common';
-import { UserRole }from '@prisma/client';
+import { NotFoundException } from '@nestjs/common';
+import { Prisma, UserRole } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentErrors } from './payments.errors';
 import { MockProvider } from './providers/mock-provider';
-import { WebhookDto } from './dto/webhook.dto';
+import { PaymentWebhookDto } from './dto/webhook.dto';
+
+const FINAL_PAYMENT = ['SUCCESS', 'FAILED', 'REFUNDED', 'EXPIRED'];
 
 @Injectable()
 export class PaymentsService {
+  private readonly log = new Logger(PaymentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly provider: MockProvider = new MockProvider(),
+    private readonly mock: MockProvider,
   ) {}
 
-  async initiatePayment(bookingId: string, userId: string) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
+  private getProvider(name: string) {
+    if (name.toUpperCase() === 'MOCK') return this.mock;
+    throw new BadRequestException({
+      error: 'VALIDATION_ERROR',
+      message: `Unknown provider: ${name}`,
     });
+  }
 
-    if (!booking) {
-      throw new NotFoundException({
-        error: PaymentErrors.BOOKING_NOT_FOUND,
-        message: 'Bron topilmadi',
-      });
-    }
-
-    if (booking.userId !== userId) {
-      throw new ForbiddenException({
-        error: PaymentErrors.FORBIDDEN_RESOURCE,
-        message: 'Bu bron sizga tegishli emas',
-      });
-    }
-
+  // ───────────────────────── POST /payments/initiate ─────────────────────────
+  // Birinchi urinish ham, FAILED'dan keyingi qayta urinish ham shu yerdan o'tadi
+  // (FAILED'da Booking PENDING ga qaytadi, shuning uchun PENDING -> PAYMENT_PENDING qayta ishlaydi).
+  async initiatePayment(bookingId: string, userId: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw new NotFoundException({ error: 'BOOKING_NOT_FOUND' });
+    if (booking.userId !== userId) throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
     if (booking.status !== 'PENDING') {
       throw new BadRequestException({
-        error: PaymentErrors.BOOKING_INVALID_STATE,
-        message: 'Bron to‘lovni boshlash holatida emas',
+        error: 'BOOKING_INVALID_STATE',
+        message: `Booking is ${booking.status}.`,
       });
     }
 
-    return this.prisma.$transaction(async (tx: any) => {
-      const updateResult = await tx.booking.updateMany({
+    const idempotencyKey = `idem-${randomUUID()}`;
+
+    const payment = await this.prisma.$transaction(async (tx) => {
+      // Poyga himoyasi: faqat bitta parallel so'rov PENDING -> PAYMENT_PENDING ga o'ta oladi
+      const { count } = await tx.booking.updateMany({
         where: { id: bookingId, userId, status: 'PENDING' },
         data: { status: 'PAYMENT_PENDING' },
       });
-
-      if (updateResult.count !== 1) {
-        throw new BadRequestException({
-          error: PaymentErrors.BOOKING_INVALID_STATE,
-          message: 'Bron holati o‘zgargan yoki to‘lov boshlangan',
-        });
+      if (count === 0) {
+        throw new BadRequestException({ error: 'BOOKING_INVALID_STATE' });
       }
 
-      const amount =
-        typeof booking.price === 'string'
-          ? booking.price
-          : booking.price.toString();
-
-      const payment = await tx.payment.upsert({
+      // Payment.bookingId UNIQUE (1:1): qayta urinishda yangi qator yaratilmaydi,
+      // FAILED qator yangi kalit bilan qayta ishga tushiriladi.
+      return tx.payment.upsert({
         where: { bookingId },
         create: {
           bookingId,
-          amount,
+          amount: booking.price,
           currency: 'UZS',
           provider: 'MOCK',
           status: 'INITIATED',
-          idempotencyKey: `pay-${bookingId}-${Date.now()}`,
+          idempotencyKey,
         },
         update: {
-          amount,
-          currency: 'UZS',
-          provider: 'MOCK',
           status: 'INITIATED',
+          idempotencyKey,
+          transactionId: null,
+          amount: booking.price,
         },
       });
+    });
 
-      const providerResult = await this.provider.initiate({
+    // Tashqi chaqiruv tranzaksiyadan tashqarida (lock vaqtini qisqa tutish)
+    let result;
+    try {
+      result = await this.mock.initiate({
         paymentId: payment.id,
         bookingId,
-        amount,
-        currency: 'UZS',
-        idempotencyKey: payment.idempotencyKey,
+        amount: payment.amount.toString(),
+        currency: payment.currency,
+        idempotencyKey,
       });
-
-      const paymentUpdateClient = tx?.payment?.update
-        ? tx.payment
-        : this.prisma.payment;
-
-      await paymentUpdateClient.update({
-        where: { id: payment.id },
-        data: {
-          transactionId: providerResult.transactionId,
-          status: 'PENDING',
-          provider: 'MOCK',
-        },
-      });
-
-      return {
-        status: 'PENDING',
-        transactionId: providerResult.transactionId,
-      };
-    });
-  }
-
-  async findOne(id: string, userId: string, role: UserRole) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { id },
-      include: {
-        booking: {
-          select: {
-            userId: true,
-            field: {
-              select: {
-                stadium: {
-                  select: {
-                    ownerId: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!payment) {
-      throw new NotFoundException({
-        error: PaymentErrors.PAYMENT_NOT_FOUND,
-        message: 'To‘lov topilmadi',
-      });
+    } catch (e) {
+      // Provider yiqilsa Booking "osilib" qolmasin
+      await this.prisma.booking.update({ where: { id: bookingId }, data: { status: 'PENDING' } });
+      await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED' } });
+      throw e;
     }
 
-    const isAdmin = role === UserRole.ADMIN;
-    const isBookingOwner = payment.booking.userId === userId;
-    const isStadiumOwner =
-      role === UserRole.OWNER &&
-      payment.booking.field.stadium.ownerId === userId;
+    const updated = await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: 'PENDING', transactionId: result.transactionId },
+    });
 
-    if (!isAdmin && !isBookingOwner && !isStadiumOwner) {
-      throw new ForbiddenException({
-        error: PaymentErrors.FORBIDDEN_RESOURCE,
-        message: 'Bu to‘lovni ko‘rishga ruxsat yo‘q',
-      });
-    }
-
+    this.log.log({ event: 'PAYMENT_INITIATED', bookingId, paymentId: payment.id });
+    // Mock rejimida idempotencyKey qaytariladi — Postman webhook'ga qo'yadi
     return {
-      id: payment.id,
-      bookingId: payment.bookingId,
-      amount: payment.amount,
-      currency: payment.currency,
-      provider: payment.provider,
-      transactionId: payment.transactionId,
-      status: payment.status,
-      createdAt: payment.createdAt,
-      updatedAt: payment.updatedAt,
+      id: updated.id,
+      bookingId,
+      status: updated.status,
+      amount: updated.amount.toString(),
+      currency: updated.currency,
+      transactionId: updated.transactionId,
+      idempotencyKey,
+      redirectUrl: result.redirectUrl,
     };
   }
 
-  async handleWebhook(provider: string, dto: WebhookDto) {
-    const normalizedProvider = provider.toUpperCase();
-
-    if (normalizedProvider !== 'MOCK') {
-      throw new BadRequestException({
-        error: PaymentErrors.UNKNOWN_PROVIDER,
-        message: 'Unsupported provider',
-      });
-    }
+  // ───────────────────── POST /payments/webhook/:provider ─────────────────────
+  async handleWebhook(providerName: string, dto: PaymentWebhookDto) {
+    this.getProvider(providerName);
 
     const payment = await this.prisma.payment.findFirst({
-      where: {
-        OR: [{ bookingId: dto.bookingId }, { idempotencyKey: dto.idempotencyKey }],
-      },
-      include: { booking: { select: { userId: true } } },
+      where: { OR: [{ bookingId: dto.bookingId }, { idempotencyKey: dto.idempotencyKey }] },
+      include: { booking: true },
     });
+    if (!payment) throw new NotFoundException({ error: 'PAYMENT_NOT_FOUND' });
 
-    if (!payment) {
-      throw new NotFoundException({
-        error: PaymentErrors.PAYMENT_NOT_FOUND,
-        message: 'Webhook uchun to‘lov topilmadi',
-      });
+    // BR-PAY-2: final holatdagi to'lov qayta ishlanmaydi
+    if (FINAL_PAYMENT.includes(payment.status)) return { received: true };
+
+    // Qayta urinishdan keyin kelgan ESKI urinish webhooki yangisini buzmasin
+    if (payment.idempotencyKey && payment.idempotencyKey !== dto.idempotencyKey) {
+      this.log.warn({ event: 'STALE_WEBHOOK_IGNORED', bookingId: payment.bookingId });
+      return { received: true };
     }
 
-   
-    if (payment.status === 'SUCCESS' || payment.status === 'FAILED') {
-      return { received: true };   // takroriy webhook — hech narsa qilmaymiz
+    if (new Prisma.Decimal(dto.amount).comparedTo(payment.amount) !== 0) {
+      throw new BadRequestException({ error: 'PAYMENT_AMOUNT_MISMATCH' });
     }
-    if (Number(dto.amount) !== Number(payment.amount)) {
-      throw new BadRequestException({
-        error: PaymentErrors.PAYMENT_AMOUNT_MISMATCH,
-        message: 'Webhook summasi to‘lov summasiga mos kelmadi',
-      });
-    }
-    
+
+    const userId = payment.booking.userId;
+
     await this.prisma.$transaction(async (tx) => {
+      // Poyga: tranzaksiya ichida joriy holatni qayta o'qiymiz
       const current = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
-    
-      // Poyga holati: boshqa webhook allaqachon ishlab bo'lgan
-      if (current.status === 'SUCCESS' || current.status === 'FAILED') {
-        return;
-      }
-    
-      if (dto.status === 'SUCCESS') {
-        await tx.payment.update({
-          where: { id: current.id },
-          data: { status: 'SUCCESS', transactionId: dto.transactionId },
-        });
-        await tx.booking.update({
-          where: { id: current.bookingId },
-          data: { status: 'CONFIRMED' },
-        });
-        await tx.notification.create({
-          data: {
-            userId: payment.booking.userId,
-            type: 'BOOKING_CONFIRMED',
-            title: 'Booking confirmed',
-            body: 'Your booking has been confirmed and paid successfully.',
-            metadata: { bookingId: payment.bookingId, paymentId: payment.id },
-          },
-        });
-      } else {
-        await tx.payment.update({
-          where: { id: current.id },
-          data: { status: 'FAILED', transactionId: dto.transactionId },
-        });
-        await tx.booking.update({
-          where: { id: current.bookingId },
-          data: { status: 'PENDING' },
-        });
-        await tx.notification.create({
-          data: {
-            userId: payment.booking.userId,
-            type: 'PAYMENT_FAILED',
-            title: 'Payment failed',
-            body: 'Your payment failed. You can try again.',
-            metadata: { bookingId: payment.bookingId, paymentId: payment.id },
-          },
-        });
-      }
+      if (FINAL_PAYMENT.includes(current.status)) return;
+
+      const success = dto.status === 'SUCCESS';
+      const paymentStatus = success ? 'SUCCESS' : 'FAILED';
+      // FAILED => Booking PENDING (qayta urinish mumkin). Muddati o'tsa CRON EXPIRED qiladi.
+      const bookingStatus = success ? 'CONFIRMED' : 'PENDING';
+
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: paymentStatus, transactionId: dto.transactionId },
+      });
+      await tx.booking.update({
+        where: { id: payment.bookingId },
+        data: { status: bookingStatus },
+      });
+      await tx.notification.create({
+        data: {
+          userId,
+          type: success ? 'BOOKING_CONFIRMED' : 'PAYMENT_FAILED',
+          title: success ? 'Bron tasdiqlandi' : "To'lov amalga oshmadi",
+          body: success
+            ? "To'lov qabul qilindi, broningiz tasdiqlandi."
+            : "To'lov muvaffaqiyatsiz tugadi. Muddat tugamaguncha qayta urinib ko'ring.",
+          metadata: { bookingId: payment.bookingId, paymentId: payment.id },
+        },
+      });
     });
-    
+
+    if (dto.status === 'FAILED') {
+      this.log.warn({ event: 'PAYMENT_FAILED', bookingId: payment.bookingId, reason: dto.failureReason });
+    }
     return { received: true };
+  }
+
+  // ─────────────────────────── GET /payments/:id ───────────────────────────
+  async findOne(id: string, userId: string, role: UserRole) {
+    const p = await this.prisma.payment.findUnique({
+      where: { id },
+      include: { booking: { include: { field: { include: { stadium: true } } } } },
+    });
+    if (!p) throw new NotFoundException({ error: 'PAYMENT_NOT_FOUND' });
+
+    const allowed =
+      role === UserRole.ADMIN ||
+      p.booking.userId === userId ||
+      (role === UserRole.OWNER && p.booking.field.stadium.ownerId === userId);
+    if (!allowed) throw new ForbiddenException({ error: 'FORBIDDEN_RESOURCE' });
+
+    // idempotencyKey va booking qaytarilmaydi
+    return {
+      id: p.id,
+      bookingId: p.bookingId,
+      amount: p.amount.toString(),
+      currency: p.currency,
+      provider: p.provider,
+      transactionId: p.transactionId,
+      status: p.status,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    };
   }
 }

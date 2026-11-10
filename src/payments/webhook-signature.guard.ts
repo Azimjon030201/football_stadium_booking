@@ -1,30 +1,24 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, RawBodyRequest } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createHmac, timingSafeEqual } from 'crypto';
-import { Request } from 'express';
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import { MockProvider } from './providers/mock-provider';
 
-/**
- * HMAC-SHA256 imzo tekshiruvi. Header: x-signature = hex(hmac(secret, rawBody)).
- * main.ts da: NestFactory.create(AppModule, { rawBody: true })
- * Dev muhitida mock provayder uchun imzo talab qilinmaydi (Postman'da qulay).
- */
+// HMAC tekshiruvi servisdan alohida (servis testlari 2 argument bilan chaqiradi).
+// main.ts: NestFactory.create(AppModule, { rawBody: true })
 @Injectable()
 export class WebhookSignatureGuard implements CanActivate {
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly mock: MockProvider) {}
 
   canActivate(ctx: ExecutionContext): boolean {
-    const req = ctx.switchToHttp().getRequest<RawBodyRequest<Request>>();
-    const isProd = this.config.get('NODE_ENV') === 'production';
-    if (!isProd && req.params.provider === 'mock') return true;
+    const req = ctx.switchToHttp().getRequest();
+    // Noma'lum providerni servis o'zi 400 bilan rad etadi
+    if (String(req.params?.provider).toUpperCase() !== 'MOCK') return true;
 
-    const secret = this.config.get<string>('PAYMENT_WEBHOOK_SECRET');
-    const signature = req.header('x-signature');
-    if (!secret || !signature || !req.rawBody) throw new ForbiddenException({ error: 'INVALID_SIGNATURE' });
-
-    const expected = createHmac('sha256', secret).update(req.rawBody).digest('hex');
-    const a = Buffer.from(signature, 'hex');
-    const b = Buffer.from(expected, 'hex');
-    if (a.length !== b.length || !timingSafeEqual(a, b)) throw new ForbiddenException({ error: 'INVALID_SIGNATURE' });
+    const ok = this.mock.verifySignature(req.rawBody, req.headers['x-signature']);
+    if (!ok) {
+      throw new ForbiddenException({
+        error: 'FORBIDDEN_RESOURCE',
+        message: 'Invalid webhook signature.',
+      });
+    }
     return true;
   }
 }
